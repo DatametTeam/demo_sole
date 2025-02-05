@@ -68,11 +68,11 @@ def update_prediction_visualization(gt_array, pred_array):
             #                  use_container_width=True)
 
         with pred_row_container:
-            fig4 = compute_figure(gt_array[i, 0, :, :], basemap)
+            fig4 = compute_figure(gt_array[i, 0, :, :])
             # Display the image using Streamlit
             pred_plus_30.pyplot(fig4)
 
-            fig5 = compute_figure(gt_array[i, 0, :, :], basemap)
+            fig5 = compute_figure(gt_array[i, 0, :, :])
             # Display the image using Streamlit
             pred_plus_60.pyplot(fig5)
 
