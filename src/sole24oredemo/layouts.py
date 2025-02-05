@@ -14,15 +14,15 @@ def configure_sidebar() -> None:
 def init_prediction_visualization_layout():
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.subheader("Frame t0")
+        st.markdown("<h3 style='text-align: center;'>Frame t0</h3>", unsafe_allow_html=True)
         gt_current = st.empty()
         pred_current = st.empty()
     with col2:
-        st.subheader("Frame t+30")
+        st.markdown("<h3 style='text-align: center;'>Frame t+30</h3>", unsafe_allow_html=True)
         gt_plus_30 = st.empty()
         pred_plus_30 = st.empty()
     with col3:
-        st.subheader("Frame t+60")
+        st.markdown("<h3 style='text-align: center;'>Frame t+60</h3>", unsafe_allow_html=True)
         gt_plus_60 = st.empty()
         pred_plus_60 = st.empty()
     return gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60
