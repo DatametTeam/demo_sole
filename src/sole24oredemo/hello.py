@@ -6,8 +6,8 @@ from PIL import Image
 from pathlib import Path
 import time
 import numpy as np
-from sole24oredemo.layouts import configure_sidebar, init_prediction_visualization_layout
-from sole24oredemo.pbs import is_pbs_available
+from layouts import configure_sidebar, init_prediction_visualization_layout
+from pbs import is_pbs_available
 
 st.set_page_config(page_title="Weather prediction", page_icon=":flag-eu:", layout="wide")
 # st.image(Image.open(Path(__file__).parent / "static/faradai_logo.png"))
