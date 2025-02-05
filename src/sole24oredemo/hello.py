@@ -6,8 +6,9 @@ from PIL import Image
 from pathlib import Path
 import time
 import numpy as np
-from layouts import configure_sidebar, init_prediction_visualization_layout
-from pbs import is_pbs_available
+from sole24oredemo.layouts import configure_sidebar, init_prediction_visualization_layout
+from sole24oredemo.pbs import is_pbs_available
+
 st.set_page_config(page_title="Weather prediction", page_icon=":flag-eu:", layout="wide")
 # st.image(Image.open(Path(__file__).parent / "static/faradai_logo.png"))
 
@@ -51,8 +52,6 @@ def get_prediction_results(out_dir):
     pred_array = np.load(out_dir / "pred_mock_data.npy")
     return gt_array, pred_array
 
-def display_animation(arrays, data_containers):
-    return None
 
 def display_prediction_results(out_dir):   
     gt_array, pred_array = get_prediction_results(out_dir)

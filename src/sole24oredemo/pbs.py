@@ -79,6 +79,7 @@ python3 "$WORKDIR/faradai/dreambooth_scripts/run_inference.py" \
     print(f"cmd_string: \n > {cmd_string}")
     pbs_logs = out_dir / "pbs_logs"
     pbs_logs.mkdir(parents=True, exist_ok=True)
+    
     pbs_script = "#!/bin/bash"
     pbs_script += get_pbs_header("sole24ore_demo", TARGET_GPU, str(pbs_logs / "pbs.log"))
     pbs_script += get_pbs_env()
