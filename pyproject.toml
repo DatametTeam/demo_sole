@@ -3,8 +3,27 @@ name = "demo24ore"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "pip>=25.0",
     "streamlit>=1.41.1",
+    "h5py",
+    "numpy==1.24.4",
+    "pyproj==3.5.0",
+    "scipy==1.10.1",
+    "numba==0.58.1",
+    "matplotlib==3.7.5",
+    "pyaml==24.4.0",
+    "basemap==1.4.1",
+    "jupyterlab==4.2.3",
+    "ipykernel==6.29.5",
+    "rasterio==1.4.0",
+    "fiona==1.9.6",
+    "geopandas==1.0.1",
+    "shapely==2.0.6",
+    "scikit-image==0.24.0",
+    "deprecated==1.2.14",
+    "seaborn==0.13.2",
+    "ipympl==0.9.6"
+
 ]

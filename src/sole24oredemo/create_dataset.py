@@ -23,6 +23,8 @@ def read_hdf_files_sequences(root_folder, sequence_length=12):
             if file.endswith(('.h5', '.hdf', '.hdf5')):
                 file_paths.append(os.path.join(subdir, file))
 
+    file_paths = sorted(file_paths, key=lambda x: x.split('_')[-1].split('.')[0])
+
     for i, file_path in enumerate(file_paths[:-12]):
         with h5py.File(file_path, 'r') as hdf_file:
             # Adjust this to match your actual data path
@@ -31,17 +33,20 @@ def read_hdf_files_sequences(root_folder, sequence_length=12):
             file_sequences = []
             for seq in range(12):
                 next_elem = file_paths[i + seq]
-                with h5py.File(file_path, 'r') as hdf1_file:
-                    data = hdf_file['dataset1']['data1']['data'][:]
+                with h5py.File(next_elem, 'r') as hdf1_file:
+                    data = hdf1_file['dataset1']['data1']['data'][:]
                     file_sequences.append(data)
 
             all_sequences.append(file_sequences)
 
     return np.array(all_sequences) if all_sequences else None
 
+
 # Example usage
-root_folder = r'C:\Users\MatteoGuidi\Desktop\LDO\dati_datamet\SRI_adj_01-25\29'
+root_folder = "/davinci-1/work/protezionecivile/SRI_sole24/SRI_adj_01-25/31"
 combined_sequences = read_hdf_files_sequences(root_folder)
 
 if combined_sequences is not None:
     print("Combined sequences shape:", combined_sequences.shape)
+    np.save("/archive/SSD/home/guidim/demo_sole/data/output/ConvLSTM/20250205/20250205/generations/data.npy",
+            combined_sequences)
