@@ -43,7 +43,7 @@ class MockJob:
         # Define dimensions
         starttimestamps = np.arange(0, 24)  # 24 timestamps (0 to 23)
         hourstep = np.arange(1, 13)  # 12 steps (1 to 12)
-        width, height = 512, 512
+        width, height = 1400, 1200
         
         # Generate random noise data
         data_shape = (len(starttimestamps), len(hourstep), width, height)

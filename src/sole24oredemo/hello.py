@@ -1,3 +1,4 @@
+import io
 import os
 import streamlit as st
 from time import sleep
@@ -8,6 +9,7 @@ import time
 import numpy as np
 from layouts import configure_sidebar, init_prediction_visualization_layout
 from pbs import is_pbs_available
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Weather prediction", page_icon=":flag-eu:", layout="wide")
 # st.image(Image.open(Path(__file__).parent / "static/faradai_logo.png"))
@@ -21,7 +23,24 @@ def update_prediction_visualization(gt_array, pred_array):
     gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60 = init_prediction_visualization_layout()
     i = 0
     while i < gt_array.shape[0]:
-        gt_current.image(gt_array[i, 0, :, :], caption="GT Frame t0", use_container_width=True)
+        # Create a figure and plot the image using the colormap
+        fig, ax = plt.subplots()
+        cax = ax.imshow(gt_array[i, 0, :, :], cmap='viridis')
+
+        # Remove axis if desired
+        ax.axis('off')
+
+        # Save the plot to a BytesIO buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0)
+        buf.seek(0)
+
+        # Open the image from the buffer with PIL
+        img = Image.open(buf)
+
+        # Display the image using Streamlit
+        gt_current.image(img, caption="GT Frame t0", use_container_width=True)
+
         pred_current.empty()
         gt_plus_30.image(gt_array[i, 3, :, :], caption="GT Frame t+30", use_container_width=True)
         pred_plus_30.image(pred_array[i, 3, :, :], caption="Pred Frame t+30", use_container_width=True)
@@ -48,8 +67,18 @@ def submit_prediction_job(sidebar_args):
     return error, out_dir
 
 def get_prediction_results(out_dir):
-    gt_array = np.load(out_dir / "gt_mock_data.npy")
-    pred_array = np.load(out_dir / "pred_mock_data.npy")
+    gt_array = np.load(out_dir / "data.npy", mmap_mode='r')[0:50]
+    gt_array = np.array(gt_array)
+    gt_array[gt_array < 0] = 0
+    gt_array[gt_array > 200] = 200
+    gt_array = (gt_array - np.min(gt_array)) / (np.max(gt_array) - np.min(gt_array))
+
+    pred_array = np.load(out_dir / "data.npy", mmap_mode='r')[0:50]
+    pred_array = np.array(pred_array)
+    pred_array[pred_array < 0] = 0
+    pred_array[pred_array > 200] = 200
+    pred_array = (pred_array - np.min(pred_array)) / (np.max(pred_array) - np.min(pred_array))
+
     return gt_array, pred_array
 
 
