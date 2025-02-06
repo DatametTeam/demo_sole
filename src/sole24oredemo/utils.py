@@ -19,8 +19,22 @@ map_ = pyproj.Proj({"proj": 'tmerc', "lat_0": lat_0, "lon_0": lon_0})
 SHAPEFILE_FOLDER = ROOT_PATH / "shapefiles"
 
 
-def compute_figure(img1):
+def compute_figure(img1, timestamp):
     fig = plt.figure()
+    cmap, norm, vmin, vmax, null_color, void_color, discrete, ticks = (
+        configure_colorbar('R', min_val=None, max_val=None)
+    )
+    destlines = 1400
+    destcols = 1200
+    y = np.arange(destlines).reshape(-1, 1) * np.ones((1, destcols))
+    x = np.ones((destlines, 1)) * np.arange(destcols).reshape(1, -1).astype(int)
+
+    y, x = lincol_2_yx(lin=y, col=x, params=par, set_center=True)
+    lat, lon = yx_2_latlon(y, x, map_)
+    ll_lat = 35
+    ur_lat = 47
+    ll_lon = 6.5
+    ur_lon = 20
 
     m = Basemap(
         projection=map_.name,
@@ -52,7 +66,7 @@ def compute_figure(img1):
         linewidths=0,
     )
     c.set_edgecolor("face")
-    plt.suptitle("PROVA PROVA")
+    plt.suptitle(timestamp)
     return fig
 
 
@@ -95,29 +109,46 @@ def build_legend_file_path(parname):
     return legend_file_path
 
 
+def forward(x, thresh):
+    """ Map the threshold values to a [0, 1] scale. """
+    return np.interp(x, thresh, np.linspace(0, 1, len(thresh)))
+
+
+def inverse(x, thresh):
+    """ Map normalized values [0, 1] back to the original threshold values. """
+    return np.interp(x, np.linspace(0, 1, len(thresh)), thresh)
+
+
+class CustomNorm(mcolors.Normalize):
+    """ Custom normalization to handle forward and inverse functions with thresholds. """
+
+    def __init__(self, thresh, vmin=None, vmax=None):
+        super().__init__(vmin, vmax)
+        self.thresh = thresh
+
+    def __call__(self, value, clip=None):
+        return forward(value, self.thresh)
+
+    def inverse(self, value):
+        return inverse(value, self.thresh)
+
+
 def create_colormap_from_legend(legend_data, parname, min_value, max_value):
     cmap_name = 'colormap_from_legend'
+
     if legend_data["discrete"] == 0:
         thresh = legend_data["Thresh"]
         extended_thresh = thresh
         rgb_colors = legend_data["rgb"]
         cmap = mcolors.LinearSegmentedColormap.from_list(cmap_name, rgb_colors, N=256)
 
-        def forward(x):
-            """ map_ the threshold values to a [0, 1] scale. """
-            return np.interp(x, thresh, np.linspace(0, 1, len(thresh)))
-
-        def inverse(x):
-            """ map_ normalized values [0, 1] back to the original threshold values. """
-            return np.interp(x, np.linspace(0, 1, len(thresh)), thresh)
-
-        norm = mcolors.FuncNorm((forward, inverse), vmin=thresh[0], vmax=thresh[-1])
-
+        norm = CustomNorm(thresh, vmin=thresh[0], vmax=thresh[-1])
     else:
         extended_thresh = legend_data["Thresh"]
         rgb_colors = legend_data["rgb"]
         cmap = mcolors.ListedColormap(rgb_colors)
         norm = mcolors.BoundaryNorm(extended_thresh, cmap.N)
+
     return cmap, norm, extended_thresh
 
 
@@ -396,19 +427,3 @@ def get_italian_region_shapefile() -> Path:
     files_in_folder = list(italian_regions_folder_path.glob("*"))
     filename = files_in_folder[0].stem
     return italian_regions_folder_path / filename
-
-
-cmap, norm, vmin, vmax, null_color, void_color, discrete, ticks = (
-    configure_colorbar('R', min_val=None, max_val=None)
-)
-destlines = 1400
-destcols = 1200
-y = np.arange(destlines).reshape(-1, 1) * np.ones((1, destcols))
-x = np.ones((destlines, 1)) * np.arange(destcols).reshape(1, -1).astype(int)
-
-y, x = lincol_2_yx(lin=y, col=x, params=par, set_center=True)
-lat, lon = yx_2_latlon(y, x, map_)
-ll_lat = 35
-ur_lat = 47
-ll_lon = 6.5
-ur_lon = 20

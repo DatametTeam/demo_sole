@@ -11,6 +11,7 @@ from pbs import is_pbs_available
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
+from sole24oredemo.parallel_code import create_fig_dict_in_parallel
 from sole24oredemo.utils import compute_figure
 
 st.set_page_config(page_title="Weather prediction", page_icon=":flag-eu:", layout="wide")
@@ -22,68 +23,59 @@ else:
     from mock import inference_mock as submit_inference, get_job_status
 
 
-def update_prediction_visualization(gt_array, pred_array):
+def update_prediction_visualization(gt_dict, pred_dict):
+    """
+    Visualizes ground truth and prediction images side by side using Streamlit.
+
+    Parameters:
+    - gt_dict: Dictionary containing GT figures with keys formatted as "%d%m%Y_%H%M".
+    - pred_dict: Dictionary containing prediction figures with keys formatted as "%d%m%Y_%H%M",
+                 and values as nested dictionaries with keys '+0min', '+30min', '+55min'.
+    """
+    # Initialize layout containers
     gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60 = \
         init_prediction_visualization_layout()
-    i = 0
 
-    # Define the hardcoded date
-    base_date = datetime.strptime('31-01-2025', "%d-%m-%Y")
+    # Sort GT keys (dates)
+    sorted_gt_keys = sorted(gt_dict.keys(), key=lambda x: datetime.strptime(x, "%d%m%Y_%H%M"))
 
-    # Add labels for rows
-    st.markdown("### GROUNDTRUTH", unsafe_allow_html=True)
-    gt_row_container = st.container()
-    st.markdown("### PREDICTIONS", unsafe_allow_html=True)
-    pred_row_container = st.container()
+    # Iterate over sorted GT keys
+    for key in sorted_gt_keys:
+        # Retrieve GT figures
+        gt_current_fig = gt_dict.get(key)
+        gt_plus_30_key = (datetime.strptime(key, "%d%m%Y_%H%M") + timedelta(minutes=30)).strftime("%d%m%Y_%H%M")
+        gt_plus_60_key = (datetime.strptime(key, "%d%m%Y_%H%M") + timedelta(minutes=60)).strftime("%d%m%Y_%H%M")
+        gt_plus_30_fig = gt_dict.get(gt_plus_30_key)
+        gt_plus_60_fig = gt_dict.get(gt_plus_60_key)
 
-    while i < gt_array.shape[0]:
-        # Calculate the current datetime based on the iteration
-        start_time = datetime.strptime('00:00', "%H:%M") + timedelta(minutes=i * 5)
-        current_datetime = base_date + timedelta(hours=start_time.hour, minutes=start_time.minute)
+        # Retrieve Prediction figures
+        pred_data = pred_dict.get(key, {})
+        # pred_current_fig = pred_data.get('+0min')
+        pred_plus_30_fig = pred_data.get('+30min')
+        pred_plus_60_fig = pred_data.get('+60min')
 
-        # Format date and time for captions
-        datetime_caption = current_datetime.strftime("%d-%m-%Y %H:%M")
+        # Display GT figures
+        if gt_current_fig is not None:
+            gt_current.pyplot(gt_current_fig)
 
-        with gt_row_container:
-            # Create a figure and plot the image using the colormap
+        if gt_plus_30_fig is not None:
+            gt_plus_30.pyplot(gt_plus_30_fig)
 
-            fig1 = compute_figure(gt_array[i, 0, :, :])
-            # Display the image using Streamlit
-            gt_current.pyplot(fig1)
+        if gt_plus_60_fig is not None:
+            gt_plus_60.pyplot(gt_plus_60_fig)
 
-            fig2 = compute_figure(gt_array[i, 6, :, :])
-            # Display the image using Streamlit
-            gt_plus_30.pyplot(fig2)
+        # # Display Prediction figures
+        # if pred_current_fig is not None:
+        #     pred_current.pyplot(pred_current_fig)
 
-            fig3 = compute_figure(gt_array[i, -1, :, :])
-            # Display the image using Streamlit
-            gt_plus_60.pyplot(fig3)
+        if pred_plus_30_fig is not None:
+            pred_plus_30.pyplot(pred_plus_30_fig)
 
-            # plus_30_date = current_datetime + timedelta(minutes=30)
-            # gt_plus_30.image(gt_array[i, 3, :, :], caption=plus_30_date.strftime("%d-%m-%Y %H:%M"),
-            #                  use_container_width=True)
-            #
-            # plus_60_date = current_datetime + timedelta(minutes=60)
-            # gt_plus_60.image(gt_array[i, 6, :, :], caption=plus_60_date.strftime("%d-%m-%Y %H:%M"),
-            #                  use_container_width=True)
+        if pred_plus_60_fig is not None:
+            pred_plus_60.pyplot(pred_plus_60_fig)
 
-        with pred_row_container:
-            fig4 = compute_figure(gt_array[i, 0, :, :])
-            # Display the image using Streamlit
-            pred_plus_30.pyplot(fig4)
-
-            fig5 = compute_figure(gt_array[i, 0, :, :])
-            # Display the image using Streamlit
-            pred_plus_60.pyplot(fig5)
-
-            # pred_current.empty()
-            # pred_plus_30.image(pred_array[i, 3, :, :], caption=plus_30_date.strftime("%d-%m-%Y %H:%M"),
-            #                    use_container_width=True)
-            # pred_plus_60.image(pred_array[i, 6, :, :], caption=plus_60_date.strftime("%d-%m-%Y %H:%M"),
-            #                    use_container_width=True)
-
+        # Pause for visualization
         time.sleep(0.2)
-        i += 1
 
 
 def submit_prediction_job(sidebar_args):
@@ -102,8 +94,12 @@ def submit_prediction_job(sidebar_args):
                     sleep(2)
                     status.update(label="Prediction in progress...", state="running", expanded=True)
                     pbs_job_id = 1
-        status.update(label="Prediction completed!", state="complete", expanded=False)
-    return error, out_dir
+                status.update(label="Prediction completed!", state="complete", expanded=False)
+                status.update(label="Computing images", state="running", expanded=True)
+                gt_dict_figs, pred_dict_figs = create_fig_dict_in_parallel()
+        status.update(label="Done!", state="complete", expanded=False)
+
+    return error, gt_dict_figs, pred_dict_figs
 
 
 def get_prediction_results(out_dir):
@@ -125,17 +121,17 @@ def get_prediction_results(out_dir):
     return gt_array, pred_array
 
 
-def display_prediction_results(out_dir):
-    gt_array, pred_array = get_prediction_results(out_dir)
-    update_prediction_visualization(gt_array, pred_array)
+def display_prediction_results(gt_images, pred_images):
+    # gt_array, pred_array = get_prediction_results(out_dir)
+    update_prediction_visualization(gt_images, pred_images)
 
 
 def main_page(sidebar_args) -> None:
     submitted = sidebar_args[-1]
     if submitted:
-        error, out_dir = submit_prediction_job(sidebar_args)
+        error, gt_dict_figs, pred_dict_figs = submit_prediction_job(sidebar_args)
         if not error:
-            display_prediction_results(out_dir)
+            display_prediction_results(gt_dict_figs, pred_dict_figs)
         else:
             st.error(error)
 
