@@ -23,7 +23,7 @@ else:
 import imageio
 
 
-def create_gif_from_saved_figures(figures_dict):
+def create_gif_from_saved_figures(figures_dict, progress_placeholder):
     # Create a BytesIO buffer to hold the GIF in memory
     buf = io.BytesIO()
     frames = []
@@ -31,9 +31,15 @@ def create_gif_from_saved_figures(figures_dict):
     # Sort the dictionary by key to ensure the frames are in chronological order
     sorted_keys = sorted(figures_dict.keys())
 
+    progress_bar = st.progress(0)
+
     # Loop through the sorted keys and retrieve the corresponding figure
-    for key in sorted_keys:
+    for i, key in enumerate(sorted_keys):
         fig = figures_dict[key]  # Retrieve the figure from the dictionary
+
+        progress = (i + 1) / len(sorted_keys)
+        progress_bar.progress(progress)
+        progress_placeholder.write(f"Processing frame {i + 1}/{len(sorted_keys)}")
 
         # Save the figure to a buffer
         buf_tracked = io.BytesIO()
@@ -45,6 +51,7 @@ def create_gif_from_saved_figures(figures_dict):
     # Create the GIF with the frames
     imageio.mimsave(buf, frames, format='GIF', fps=5, loop=0)  # Adjust duration for frame rate
     buf.seek(0)  # Go to the start of the buffer to send it to st.image
+    progress_placeholder.empty()
 
     return buf
 
@@ -67,17 +74,8 @@ def create_figure_dict_from_array(gt_array):
     return figure_dict
 
 
-def update_prediction_visualization(gt_array, pred_array):
+def update_prediction_visualization(gt0_gif):
     gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60 = init_prediction_visualization_layout()
-
-    gt_array = gt_array[:, 0, :, :]
-    gt0_dict = create_figure_dict_from_array(gt_array)
-
-    gt0_gif = create_gif_from_saved_figures(gt0_dict)
-
-    # Store the GIF in session state for tab1
-    st.session_state.tab1_gif = gt0_gif.getvalue()
-
     # Display the GIF using Streamlit
     gt_current.image(gt0_gif, caption="Prediction Animation", use_container_width=True)
     pred_current.empty()
@@ -101,6 +99,17 @@ def submit_prediction_job(sidebar_args):
                 # while get_job_status(pbs_job_id)=="R":
                 #     sleep(1)
                 #     status.update(label="🔄 Prediction in progress...", state="running", expanded=True)
+                progress_bar = st.progress(0)
+                your_array = np.zeros(100)
+                status_placeholder = st.empty()
+                for i in range(len(your_array)):
+                    # Your processing logic here
+                    progress = (i + 1) / len(your_array)
+                    progress_bar.progress(progress)
+                    status_placeholder.write(f"Processing item {i + 1}/{len(your_array)}")
+                    time.sleep(0.01)
+                # status1.update(label="Processing complete!")
+
         status.update(label="✅ Prediction completed!", state="complete", expanded=False)
     return error, out_dir
 
@@ -121,11 +130,6 @@ def get_prediction_results(out_dir):
     return gt_array, pred_array
 
 
-def display_prediction_results(out_dir):
-    gt_array, pred_array = get_prediction_results(out_dir)
-    update_prediction_visualization(gt_array, pred_array)
-
-
 def main_page(sidebar_args) -> None:
     # Only run prediction if not already done
     if 'prediction_result' not in st.session_state:
@@ -133,20 +137,36 @@ def main_page(sidebar_args) -> None:
         if submitted:
             error, out_dir = submit_prediction_job(sidebar_args)
             if not error:
-                gt_array, pred_array = get_prediction_results(out_dir)
-                # Store results in session state
-                st.session_state.prediction_result = {
-                    'gt_array': gt_array,
-                    'pred_array': pred_array
-                }
-                update_prediction_visualization(gt_array, pred_array)
+                with st.status(f':hammer_and_wrench: **Loading results...**', expanded=True) as status:
+
+                    prediction_placeholder = st.empty()
+                    progress_placeholder = st.empty()  # Add this line for progress bar
+
+                    with prediction_placeholder:
+                        status.update(label="🔄 Loading results...", state="running", expanded=True)
+
+                        gt_array, pred_array = get_prediction_results(out_dir)
+
+                        status.update(label="🔄 Creating GIFs...", state="running", expanded=True)
+
+                        gt_array = gt_array[:, 0, :, :]
+                        gt0_dict = create_figure_dict_from_array(gt_array)
+                        gt0_gif = create_gif_from_saved_figures(gt0_dict, progress_placeholder)
+
+                        # Store results in session state
+                        st.session_state.prediction_result = {
+                            'gt0_gif': gt0_gif,
+                        }
+                        st.session_state.tab1_gif = gt0_gif.getvalue()
+
+                        status.update(label="✅ Done!", state="complete", expanded=True)
+                        update_prediction_visualization(gt0_gif)
             else:
                 st.error(error)
     else:
         # If prediction results already exist, reuse them
-        gt_array = st.session_state.prediction_result['gt_array']
-        pred_array = st.session_state.prediction_result['pred_array']
-        update_prediction_visualization(gt_array, pred_array)
+        gt0_gif = st.session_state.prediction_result['gt0_gif']
+        update_prediction_visualization(gt0_gif)
 
 
 def get_closest_5_minute_time():
