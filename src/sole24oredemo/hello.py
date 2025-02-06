@@ -149,11 +149,18 @@ def main_page(sidebar_args) -> None:
         update_prediction_visualization(gt_array, pred_array)
 
 
+def get_closest_5_minute_time():
+    now = datetime.now()
+    # Calculate the number of minutes past the closest earlier 5-minute mark
+    minutes = now.minute - (now.minute % 5)
+    return now.replace(minute=minutes, second=0, microsecond=0).time()
+
+
 def show_prediction_page():
     st.title("Select Date and Time for Prediction")
 
     selected_date = st.date_input("Select Date", min_value=datetime(2020, 1, 1), max_value=datetime.today())
-    selected_time = st.time_input("Select Time", datetime.now().time())
+    selected_time = st.time_input("Select Time", get_closest_5_minute_time())
 
     if st.button("Submit"):
         st.session_state.selected_date = selected_date
@@ -188,18 +195,19 @@ def show_home_page():
         st.write("No GIFs available yet.")
 
 
-# Sidebar (remains as is)
-sidebar_args = configure_sidebar()
+def main():
+    # Sidebar (remains as is)
+    sidebar_args = configure_sidebar()
 
-# Create tabs using st.tabs
-tab1, tab2, tab3 = st.tabs(["Home", "Prediction by Date & Time", "Tab 3"])
+    # Create tabs using st.tabs
+    tab1, tab2, tab3 = st.tabs(["Home", "Prediction by Date & Time", "Tab 3"])
 
-with tab1:
-    main_page(sidebar_args)
+    with tab1:
+        main_page(sidebar_args)
 
-with tab2:
-    show_prediction_page()
+    with tab2:
+        show_prediction_page()
 
-with tab3:
-    st.title("Tab 3")
-    st.write("This is another tab. You can put your content here.")
+
+if __name__ == "__main__":
+    main()

@@ -1,7 +1,8 @@
 import streamlit as st
 from datetime import datetime
 
-def configure_sidebar() -> None:
+
+def configure_sidebar():
     with st.sidebar:
         st.write("**NOWCASTING**")
         with st.form("weather_prediction_form"):
@@ -10,6 +11,7 @@ def configure_sidebar() -> None:
             model_name = st.selectbox("Select a model", ("ConvLSTM", "SmAtUnet"))
             submitted = st.form_submit_button("Submit", type="primary", use_container_width=True)
         return start_date, end_date, model_name, submitted
+
 
 def init_prediction_visualization_layout():
     col1, col2, col3 = st.columns(3)
