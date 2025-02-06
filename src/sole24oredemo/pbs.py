@@ -1,4 +1,6 @@
 import subprocess
+from pathlib import Path
+
 from constants import OUTPUT_DATA_DIR, TARGET_GPU
 from datetime import datetime
 
@@ -67,7 +69,7 @@ def submit_inference(args) -> tuple[str, str]:
 
     # TO UPDATE!
     out_dir = OUTPUT_DATA_DIR / model_name / start_date.strftime("%Y%m%d") / end_date.strftime("%Y%m%d")
-
+    
     # DEFINE THE OUTPUT DIRECTORY ! TO UPDATE!
     date_now = datetime.now().strftime("%Y%m%d%H%M%S")
     out_images_dir = out_dir / "generations" / date_now
