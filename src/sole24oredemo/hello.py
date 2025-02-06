@@ -11,7 +11,7 @@ from layouts import configure_sidebar, init_prediction_visualization_layout
 from pbs import is_pbs_available
 import matplotlib.pyplot as plt
 import imageio
-from datetime import datetime
+from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Weather prediction", page_icon=":flag-eu:", layout="wide")
 
@@ -159,29 +159,74 @@ def get_closest_5_minute_time():
 def show_prediction_page():
     st.title("Select Date and Time for Prediction")
 
-    selected_date = st.date_input("Select Date", min_value=datetime(2020, 1, 1), max_value=datetime.today())
+    # Date and time selection
+    selected_date = st.date_input(
+        "Select Date", min_value=datetime(2020, 1, 1).date(), max_value=datetime.today().date()
+    )
     selected_time = st.time_input("Select Time", get_closest_5_minute_time())
 
     if st.button("Submit"):
-        st.session_state.selected_date = selected_date
-        st.session_state.selected_time = selected_time
+        # Combine selected date and time
+        selected_datetime = datetime.combine(selected_date, selected_time)
+        selected_key = selected_datetime.strftime("%Y-%m-%d_%H:%M")
 
-        st.write(f"Selected Date: {selected_date}")
-        st.write(f"Selected Time: {selected_time}")
+        # Prepare ground truth frames
+        groundtruth_frames = []
+        for i in range(12):
+            frame_time = selected_datetime - timedelta(minutes=5 * (12 - i - 1))
+            frame_key = frame_time.strftime("%Y-%m-%d_%H:%M")
+            if frame_key in groundtruth_dict:
+                groundtruth_frames.append(groundtruth_dict[frame_key])
+            else:
+                groundtruth_frames.append(None)  # Placeholder for missing frames
 
-        sample_image = np.random.rand(100, 100)  # Create a dummy image
-        buf = io.BytesIO()
-        Image.fromarray((sample_image * 255).astype(np.uint8)).save(buf, format="PNG")
+        # Prepare target frames
+        target_frames = []
+        for i in range(12):
+            frame_time = selected_datetime + timedelta(minutes=5 * (i + 1))
+            frame_key = frame_time.strftime("%Y-%m-%d_%H:%M")
+            if frame_key in groundtruth_dict:
+                target_frames.append(groundtruth_dict[frame_key])
+            else:
+                target_frames.append(None)  # Placeholder for missing frames
 
-        # Store the generated GIF buffer for tab2
-        st.session_state.tab2_gif = buf.getvalue()
+        # Prepare prediction frames
+        pred_frames = []
+        if selected_key in pred_dict:
+            for offset, pred_frame in pred_dict[selected_key].items():
+                pred_frames.append(pred_frame)
+        while len(pred_frames) < 12:
+            pred_frames.append(None)  # Fill missing frames
 
-        # Display the GIF
-        st.image(st.session_state.tab2_gif, caption="Prediction Image", use_column_width=True)
-    else:
-        # Display the stored GIF buffer for tab2 if it exists
-        if "tab2_gif" in st.session_state:
-            st.image(st.session_state.tab2_gif, caption="Prediction Image", use_column_width=True)
+        # Create 3 columns
+        cols = st.columns(3)
+
+        # Groundtruth column
+        with cols[0]:
+            st.markdown("<h5 style='font-size:14px;'>Groundtruth</h5>", unsafe_allow_html=True)
+            for frame in groundtruth_frames:
+                if frame is not None:
+                    st.image((frame * 255).astype(np.uint8), use_container_width=True)
+                else:
+                    st.text("Missing Frame")
+
+        # Target column
+        with cols[1]:
+            st.markdown("<h5 style='font-size:14px;'>Target</h5>", unsafe_allow_html=True)
+            for frame in target_frames:
+                if frame is not None:
+                    st.image((frame * 255).astype(np.uint8), use_container_width=True)
+                else:
+                    st.text("Missing Frame")
+
+        # Prediction column
+        with cols[2]:
+            st.markdown("<h5 style='font-size:14px;'>Prediction</h5>", unsafe_allow_html=True)
+            for frame in pred_frames:
+                if frame is not None:
+                    st.image((frame * 255).astype(np.uint8), use_container_width=True)
+                else:
+                    st.text("Missing Frame")
 
 
 def show_home_page():
@@ -208,6 +253,52 @@ def main():
     with tab2:
         show_prediction_page()
 
+
+# Dummy dictionaries for ground truth and predictions
+groundtruth_dict = {
+    "2025-02-06_14:00": np.random.rand(1400, 1200),
+    "2025-02-06_14:05": np.random.rand(1400, 1200),
+    "2025-02-06_14:10": np.random.rand(1400, 1200),
+    "2025-02-06_14:15": np.random.rand(1400, 1200),
+    "2025-02-06_14:20": np.random.rand(1400, 1200),
+    "2025-02-06_14:25": np.random.rand(1400, 1200),
+    "2025-02-06_14:30": np.random.rand(1400, 1200),
+    "2025-02-06_14:35": np.random.rand(1400, 1200),
+    "2025-02-06_14:40": np.random.rand(1400, 1200),
+    "2025-02-06_14:45": np.random.rand(1400, 1200),
+    "2025-02-06_14:50": np.random.rand(1400, 1200),
+    "2025-02-06_14:55": np.random.rand(1400, 1200),
+    "2025-02-06_15:00": np.random.rand(1400, 1200),
+    "2025-02-06_15:05": np.random.rand(1400, 1200),
+    "2025-02-06_15:10": np.random.rand(1400, 1200),
+    "2025-02-06_15:15": np.random.rand(1400, 1200),
+    "2025-02-06_15:20": np.random.rand(1400, 1200),
+    "2025-02-06_15:25": np.random.rand(1400, 1200),
+    "2025-02-06_15:30": np.random.rand(1400, 1200),
+    "2025-02-06_15:35": np.random.rand(1400, 1200),
+    "2025-02-06_15:40": np.random.rand(1400, 1200),
+    "2025-02-06_15:45": np.random.rand(1400, 1200),
+    "2025-02-06_15:50": np.random.rand(1400, 1200),
+    "2025-02-06_15:55": np.random.rand(1400, 1200),
+    "2025-02-06_16:00": np.random.rand(1400, 1200),
+}
+pred_dict = {
+    "2025-02-06_15:00": {
+        "+5mins": np.random.rand(1400, 1200),
+        "+10mins": np.random.rand(1400, 1200),
+        "+15mins": np.random.rand(1400, 1200),
+        "+20mins": np.random.rand(1400, 1200),
+        "+25mins": np.random.rand(1400, 1200),
+        "+30mins": np.random.rand(1400, 1200),
+        "+35mins": np.random.rand(1400, 1200),
+        "+40mins": np.random.rand(1400, 1200),
+        "+45mins": np.random.rand(1400, 1200),
+        "+50mins": np.random.rand(1400, 1200),
+        "+55mins": np.random.rand(1400, 1200),
+        "+60mins": np.random.rand(1400, 1200),
+    },
+    # Add more date-time entries for predictions
+}
 
 if __name__ == "__main__":
     main()
