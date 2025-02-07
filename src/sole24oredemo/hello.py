@@ -1,6 +1,6 @@
 import io
 import os
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 
 import emoji
 import streamlit as st
@@ -19,6 +19,7 @@ from sole24oredemo.parallel_code import create_fig_dict_in_parallel
 from sole24oredemo.utils import compute_figure
 import imageio
 from datetime import datetime, timedelta
+from multiprocessing import Manager, Process, Queue
 
 st.set_page_config(page_title="Weather prediction", page_icon=":flag-eu:", layout="wide")
 
@@ -28,75 +29,96 @@ else:
     from mock import inference_mock as submit_inference, get_job_status
 
 
-def create_single_gif(start_pos, figures_dict, window_size, sorted_keys):
+def create_single_gif_for_parallel(queue, start_pos, figures_dict, window_size, sorted_keys, process_idx):
     """
-    Create a single GIF from the figures dictionary using a sliding window.
+    Create a single GIF and send progress updates through a queue.
     """
     buf = io.BytesIO()
     frames = []
-
-    # Get the window of keys for this GIF
     window_keys = sorted_keys[start_pos:start_pos + window_size]
 
-    # Process frames for the current GIF
-    for key in window_keys:
+    for i, key in enumerate(window_keys):
         fig = figures_dict[key]
-
-        # Save the figure to a buffer
         buf_tracked = io.BytesIO()
         fig.savefig(buf_tracked, format='png', bbox_inches='tight', pad_inches=0)
         buf_tracked.seek(0)
         img = Image.open(buf_tracked)
         frames.append(np.array(img))
 
-    # Create the GIF
+        # Send progress update through queue
+        progress = (i + 1) / len(window_keys)
+        queue.put(('progress', process_idx, progress))
+
     imageio.mimsave(buf, frames, format='GIF', fps=3, loop=0)
     buf.seek(0)
-    return buf
+    # Send completed GIF through queue
+    queue.put(('complete', process_idx, buf.getvalue()))
 
 
 def create_sliding_window_gifs(figures_dict, progress_placeholder, start_positions=[0, 6, 12]):
     """
-    Create multiple GIFs from the same figures dictionary using sliding windows of equal length.
-    Args:
-        figures_dict: Dictionary of figures
-        progress_placeholder: Streamlit placeholder for progress updates
-        start_positions: List of starting positions for each window
-    Returns:
-        List of BytesIO buffers containing the GIFs
+    Create multiple GIFs in parallel with progress tracking.
     """
     window_size = len(figures_dict) - 12
     sorted_keys = sorted(figures_dict.keys())
 
-    # Progress tracking variables
-    total_operations = len(start_positions)
-    progress_bar = st.progress(0)
-    operations_completed = 0
+    # Create progress bars and text containers
+    progress_bars = []
+    progress_texts = []
 
-    # Parallel processing
-    with ProcessPoolExecutor() as executor:
-        futures = [
-            executor.submit(create_single_gif, start_pos, figures_dict, window_size, sorted_keys)
-            for start_pos in start_positions
-        ]
+    with st.container():
+        for i in range(len(start_positions)):
+            progress_bars.append(st.progress(0))
+            progress_texts.append(st.empty())
 
-        gifs = []
-        for i, future in enumerate(futures):
-            gif = future.result()
-            gifs.append(gif)
+    # Setup multiprocessing queue and processes
+    queue = Manager().Queue()
+    processes = []
+    for idx, start_pos in enumerate(start_positions):
+        p = Process(
+            target=create_single_gif_for_parallel,
+            args=(queue, start_pos, figures_dict, window_size, sorted_keys, idx)
+        )
+        processes.append(p)
 
-            # Update progress
-            operations_completed += 1
-            progress = operations_completed / total_operations
-            progress_bar.progress(progress)
+    # Start all processes
+    for p in processes:
+        p.start()
 
-            # Update progress text
-            progress_placeholder.text(
-                f"Processed {operations_completed}/{total_operations} GIFs."
-            )
+    # Initialize storage for completed GIFs
+    completed_gifs = [None] * len(start_positions)
+    completed_count = 0
 
-    progress_placeholder.empty()
-    return gifs
+    # Monitor queue for updates
+    while completed_count < len(start_positions):
+        try:
+            msg_type, idx, data = queue.get(timeout=1)
+
+            if msg_type == 'progress':
+                progress_bars[idx].progress(data)
+                progress_texts[idx].text(f"GIF {idx + 1}: {int(data * 100)}% complete")
+
+            elif msg_type == 'complete':
+                completed_gifs[idx] = io.BytesIO(data)
+                completed_count += 1
+                progress_texts[idx].text(f"GIF {idx + 1}: Complete!")
+
+        except:
+            # Check if all processes are still alive
+            if not any(p.is_alive() for p in processes):
+                break
+
+    # Clean up processes
+    for p in processes:
+        p.join()
+
+    # Clear progress indicators
+    for bar in progress_bars:
+        bar.empty()
+    for text in progress_texts:
+        text.empty()
+
+    return completed_gifs
 
 
 def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeholder):
@@ -113,8 +135,7 @@ def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeho
     Returns:
         Tuple of BytesIO buffers containing the two GIFs (+30 mins, +60 mins).
     """
-
-    def create_gif(figures, gif_type):
+    def create_single_gif(queue, figures, gif_type, process_idx):
         buf = io.BytesIO()
         frames = []
 
@@ -125,6 +146,11 @@ def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeho
                 buf_tracked.seek(0)
                 img = Image.open(buf_tracked)
                 frames.append(np.array(img))
+
+                # Update progress
+                progress = (idx + 1) / len(figures)
+                queue.put(('progress', process_idx, progress))
+
             except Exception as e:
                 print(f"Error processing figure for {gif_type}, index {idx}: {e}")
                 continue
@@ -135,16 +161,15 @@ def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeho
         # Create the GIF
         imageio.mimsave(buf, frames, format='GIF', fps=3, loop=0)
         buf.seek(0)
-        return buf
+        queue.put(('complete', process_idx, buf.getvalue()))
 
     sorted_keys = sorted(prediction_dict.keys())
 
     # Select all except the last 12 keys
     keys_except_last_12 = sorted_keys[:-12]
 
-    # Use a dictionary comprehension to get the filtered dictionary
+    # Filter the dictionary
     prediction_dict = {key: prediction_dict[key] for key in keys_except_last_12}
-    print(prediction_dict)
 
     # Extract figures for +30 mins and +60 mins
     figures_30 = [nested_dict["+30min"] for nested_dict in prediction_dict.values() if "+30min" in nested_dict]
@@ -153,24 +178,62 @@ def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeho
     if not figures_30 or not figures_60:
         raise ValueError("Insufficient figures for +30 min or +60 min.")
 
-    total_operations = 2
-    progress_bar = st.progress(0)
+    # Create progress bars and placeholders
+    progress_bars = []
+    progress_texts = []
 
-    # Parallel processing for both GIFs
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        future_30 = executor.submit(create_gif, figures_30, "+30 mins")
-        future_60 = executor.submit(create_gif, figures_60, "+60 mins")
+    with st.container():
+        for _ in range(2):
+            progress_bars.append(st.progress(0))
+            progress_texts.append(st.empty())
 
-        completed = 0
-        gifs = []
-        for future in [future_30, future_60]:
-            gifs.append(future.result())  # Block until the task completes
-            completed += 1
-            progress_bar.progress(completed / total_operations)
-            progress_placeholder.text(f"Processing GIF {completed}/{total_operations}")
+    # Setup multiprocessing queue and processes
+    queue = Manager().Queue()
+    processes = []
 
-    progress_placeholder.empty()
-    return gifs
+    for idx, (figures, gif_type) in enumerate([(figures_30, "+30 mins"), (figures_60, "+60 mins")]):
+        p = Process(target=create_single_gif, args=(queue, figures, gif_type, idx))
+        processes.append(p)
+
+    # Start all processes
+    for p in processes:
+        p.start()
+
+    # Initialize storage for completed GIFs
+    completed_gifs = [None] * len(processes)
+    completed_count = 0
+
+    # Monitor queue for updates
+    while completed_count < len(processes):
+        try:
+            msg_type, idx, data = queue.get(timeout=1)
+
+            if msg_type == 'progress':
+                progress_bars[idx].progress(data)
+                progress_texts[idx].text(f"GIF {idx + 1}: {int(data * 100)}% complete")
+
+            elif msg_type == 'complete':
+                completed_gifs[idx] = io.BytesIO(data)
+                completed_count += 1
+                progress_texts[idx].text(f"GIF {idx + 1}: Complete!")
+
+        except:
+            # Check if all processes are still alive
+            if not any(p.is_alive() for p in processes):
+                break
+
+    # Clean up processes
+    for p in processes:
+        p.join()
+
+    # Clear progress indicators
+    for bar in progress_bars:
+        bar.empty()
+    for text in progress_texts:
+        text.empty()
+
+    return completed_gifs
+
 
 
 def update_prediction_visualization(gt0_gif, gt6_gif, gt12_gif, pred_gif_6, pred_gif_12):

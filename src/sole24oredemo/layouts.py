@@ -20,11 +20,12 @@ def init_prediction_visualization_layout():
         gt_current = st.empty()
         pred_current = st.empty()
     with col2:
-        st.markdown("<h3 style='text-align: center;'>Time +30min</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center;'>Grountruths</h3>", unsafe_allow_html=True)
         gt_plus_30 = st.empty()
-        pred_plus_30 = st.empty()
-    with col3:
-        st.markdown("<h3 style='text-align: center;'>Time t+60min</h3>", unsafe_allow_html=True)
-        gt_plus_60 = st.empty()
         pred_plus_60 = st.empty()
+
+    with col3:
+        st.markdown("<h3 style='text-align: center;'>Predictions</h3>", unsafe_allow_html=True)
+        gt_plus_60 = st.empty()
+        pred_plus_30 = st.empty()
     return gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60
