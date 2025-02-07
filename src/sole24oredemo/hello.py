@@ -95,8 +95,10 @@ def create_sliding_window_gifs(figures_dict, progress_placeholder, start_positio
             msg_type, idx, data = queue.get(timeout=1)
 
             if msg_type == 'progress':
+                total_steps = window_size
+                current_step = int(data * total_steps)
                 progress_bars[idx].progress(data)
-                progress_texts[idx].text(f"GIF {idx + 1}: {int(data * 100)}% complete")
+                progress_texts[idx].text(f"GIF {idx + 1}: {current_step}/{total_steps} complete")
 
             elif msg_type == 'complete':
                 completed_gifs[idx] = io.BytesIO(data)
@@ -135,6 +137,7 @@ def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeho
     Returns:
         Tuple of BytesIO buffers containing the two GIFs (+30 mins, +60 mins).
     """
+
     def create_single_gif(queue, figures, gif_type, process_idx):
         buf = io.BytesIO()
         frames = []
@@ -210,7 +213,10 @@ def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeho
 
             if msg_type == 'progress':
                 progress_bars[idx].progress(data)
-                progress_texts[idx].text(f"GIF {idx + 1}: {int(data * 100)}% complete")
+                total_steps = len(keys_except_last_12)
+                current_step = int(data * total_steps)
+                progress_bars[idx].progress(data)
+                progress_texts[idx].text(f"GIF {idx + 1}: {current_step}/{total_steps} complete")
 
             elif msg_type == 'complete':
                 completed_gifs[idx] = io.BytesIO(data)
@@ -233,7 +239,6 @@ def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeho
         text.empty()
 
     return completed_gifs
-
 
 
 def update_prediction_visualization(gt0_gif, gt6_gif, gt12_gif, pred_gif_6, pred_gif_12):
