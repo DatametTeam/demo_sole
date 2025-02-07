@@ -8,7 +8,7 @@ from functools import partial
 import numpy as np
 import streamlit as st
 from matplotlib import pyplot as plt
-from sole24oredemo.utils import compute_figure
+from sole24oredemo.utils import compute_figure, compute_figure_gpd
 
 
 def create_fig_dict_in_parallel(gt_data, pred_data, save_on_disk=False):
@@ -41,6 +41,8 @@ def create_fig_dict_in_parallel(gt_data, pred_data, save_on_disk=False):
         pred_progress = st.progress(0)
         pred_status = st.text("Processing Predictions")
 
+    print(f"DATA SHAPE PRIMA THREAD {pred_data.shape}")
+
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         pred_results = []
         total_sequences = pred_data.shape[0]
@@ -52,7 +54,7 @@ def create_fig_dict_in_parallel(gt_data, pred_data, save_on_disk=False):
         )):
             pred_results.append(result)
             pred_progress.progress((i + 1) / total_sequences)
-            pred_status.text(f"Processed {i + 1}/{total_sequences} predictions sequences")
+            pred_status.text(f"Processed {i + 1}/{total_sequences} prediction sequences")
 
     # Aggregate results into dictionaries
     gt_figures = {key: fig for result in gt_results for key, fig in result.items()}
@@ -63,14 +65,14 @@ def create_fig_dict_in_parallel(gt_data, pred_data, save_on_disk=False):
 
 def save_figure(data_slice, index, base_date, time_step, out_dir, save_on_disk):
     timestamp = base_date + index * time_step
-    fig = compute_figure(data_slice, timestamp.strftime('%d-%m-%Y %H:%M'))
+    fig = compute_figure_gpd(data_slice, timestamp.strftime('%d-%m-%Y %H:%M'))
 
     if save_on_disk:
         file_name = f"{timestamp.strftime('%d%m%Y_%H%M')}.png"
-        file_path = os.path.join(out_dir, 'gt', file_name)
+        file_path = os.path.join(out_dir, file_name)
         plt.savefig(file_path, dpi=300, bbox_inches='tight')
         plt.close(fig)
-        return {}
+        return {timestamp.strftime('%d%m%Y_%H%M'): fig}
     else:
         plt.close(fig)
         return {timestamp.strftime('%d%m%Y_%H%M'): fig}
@@ -81,11 +83,13 @@ def save_prediction_sequence(data_series, element_index, base_date, time_step, o
     folder_name = element_timestamp.strftime('%d%m%Y_%H%M')
     results = {}
 
-    for i, prediction in enumerate(data_series):
-        timestamp_offset = i * 5  # 5 minutes per time step
-        if i != 30 or i != 60:
-            pass
-        fig = compute_figure(prediction, f"+{timestamp_offset}min")
+    for i, sequence in enumerate(data_series):  # Iterate over sequence_len
+        timestamp_offset = (i + 1) * 5  # 5 minutes per time step
+        if timestamp_offset not in [30, 60]:
+            continue  # Skip if timestamp_offset is not 30 or 60
+
+        fig = compute_figure_gpd(sequence, (element_timestamp + timedelta(minutes=timestamp_offset)).strftime(
+            '%d-%m-%Y %H:%M'))  # Compute figure
 
         if save_on_disk:
             folder_path = os.path.join(out_dir, 'pred', folder_name)
@@ -94,10 +98,9 @@ def save_prediction_sequence(data_series, element_index, base_date, time_step, o
             file_path = os.path.join(folder_path, file_name)
             plt.savefig(file_path, dpi=300, bbox_inches='tight')
             plt.close(fig)
-        else:
-            results[f"+{timestamp_offset}min"] = fig
 
-    if not save_on_disk:
-        return {folder_name: results}
-    else:
-        return {}
+        # Add to the nested dictionary
+        results[f"+{timestamp_offset}min"] = fig
+
+    # print(f"Finished processing: result = {results.keys()}")
+    return {folder_name: results}

@@ -1,5 +1,6 @@
 import io
 import os
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 import emoji
 import streamlit as st
@@ -27,71 +28,161 @@ else:
     from mock import inference_mock as submit_inference, get_job_status
 
 
+def create_single_gif(start_pos, figures_dict, window_size, sorted_keys):
+    """
+    Create a single GIF from the figures dictionary using a sliding window.
+    """
+    buf = io.BytesIO()
+    frames = []
+
+    # Get the window of keys for this GIF
+    window_keys = sorted_keys[start_pos:start_pos + window_size]
+
+    # Process frames for the current GIF
+    for key in window_keys:
+        fig = figures_dict[key]
+
+        # Save the figure to a buffer
+        buf_tracked = io.BytesIO()
+        fig.savefig(buf_tracked, format='png', bbox_inches='tight', pad_inches=0)
+        buf_tracked.seek(0)
+        img = Image.open(buf_tracked)
+        frames.append(np.array(img))
+
+    # Create the GIF
+    imageio.mimsave(buf, frames, format='GIF', fps=3, loop=0)
+    buf.seek(0)
+    return buf
+
+
 def create_sliding_window_gifs(figures_dict, progress_placeholder, start_positions=[0, 6, 12]):
     """
     Create multiple GIFs from the same figures dictionary using sliding windows of equal length.
-
     Args:
         figures_dict: Dictionary of figures
         progress_placeholder: Streamlit placeholder for progress updates
-        window_size: Number of frames in each GIF (default 18)
         start_positions: List of starting positions for each window
-
     Returns:
         List of BytesIO buffers containing the GIFs
     """
     window_size = len(figures_dict) - 12
-    gifs = []
     sorted_keys = sorted(figures_dict.keys())
-    total_operations = len(start_positions) * window_size
+
+    # Progress tracking variables
+    total_operations = len(start_positions)
     progress_bar = st.progress(0)
     operations_completed = 0
 
-    for start_pos in start_positions:
-        # Create a BytesIO buffer for each GIF
-        buf = io.BytesIO()
-        frames = []
+    # Parallel processing
+    with ProcessPoolExecutor() as executor:
+        futures = [
+            executor.submit(create_single_gif, start_pos, figures_dict, window_size, sorted_keys)
+            for start_pos in start_positions
+        ]
 
-        # Get the window of keys for this GIF
-        window_keys = sorted_keys[start_pos:start_pos + window_size]
-
-        # Process frames for current GIF
-        for i, key in enumerate(window_keys):
-            fig = figures_dict[key]
+        gifs = []
+        for i, future in enumerate(futures):
+            gif = future.result()
+            gifs.append(gif)
 
             # Update progress
             operations_completed += 1
             progress = operations_completed / total_operations
             progress_bar.progress(progress)
-            progress_placeholder.text(f"Processing GIF {start_positions.index(start_pos) + 1}/{len(start_positions)}, "
-                                      f"frame {i + 1}/{window_size}")
 
-            # Save the figure to a buffer
-            buf_tracked = io.BytesIO()
-            fig.savefig(buf_tracked, format='png', bbox_inches='tight', pad_inches=0)
-            buf_tracked.seek(0)
-            img = Image.open(buf_tracked)
-            frames.append(np.array(img))
-
-        # Create the GIF
-        imageio.mimsave(buf, frames, format='GIF', fps=3, loop=0)
-        buf.seek(0)
-        gifs.append(buf)
+            # Update progress text
+            progress_placeholder.text(
+                f"Processed {operations_completed}/{total_operations} GIFs."
+            )
 
     progress_placeholder.empty()
     return gifs
 
 
-def update_prediction_visualization(gt0_gif, gt6_gif, gt12_gif):
+def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeholder):
+    """
+    Create GIFs for the predictions dictionary. Each GIF corresponds to:
+    - +30 mins: Figures from the "+30mins" key in the nested dictionary.
+    - +60 mins: Figures from the "+60mins" key in the nested dictionary.
+
+    Args:
+        prediction_dict: Dictionary where each key is a timestamp, and the value is a nested dictionary
+                         with "+30mins" and "+60mins" keys containing figures.
+        progress_placeholder: Streamlit placeholder for progress updates.
+
+    Returns:
+        Tuple of BytesIO buffers containing the two GIFs (+30 mins, +60 mins).
+    """
+
+    def create_gif(figures, gif_type):
+        buf = io.BytesIO()
+        frames = []
+
+        for idx, fig in enumerate(figures):
+            try:
+                buf_tracked = io.BytesIO()
+                fig.savefig(buf_tracked, format='png', bbox_inches='tight', pad_inches=0)
+                buf_tracked.seek(0)
+                img = Image.open(buf_tracked)
+                frames.append(np.array(img))
+            except Exception as e:
+                print(f"Error processing figure for {gif_type}, index {idx}: {e}")
+                continue
+
+        if not frames:
+            raise ValueError(f"No frames generated for {gif_type}.")
+
+        # Create the GIF
+        imageio.mimsave(buf, frames, format='GIF', fps=3, loop=0)
+        buf.seek(0)
+        return buf
+
+    sorted_keys = sorted(prediction_dict.keys())
+
+    # Select all except the last 12 keys
+    keys_except_last_12 = sorted_keys[:-12]
+
+    # Use a dictionary comprehension to get the filtered dictionary
+    prediction_dict = {key: prediction_dict[key] for key in keys_except_last_12}
+    print(prediction_dict)
+
+    # Extract figures for +30 mins and +60 mins
+    figures_30 = [nested_dict["+30min"] for nested_dict in prediction_dict.values() if "+30min" in nested_dict]
+    figures_60 = [nested_dict["+60min"] for nested_dict in prediction_dict.values() if "+60min" in nested_dict]
+
+    if not figures_30 or not figures_60:
+        raise ValueError("Insufficient figures for +30 min or +60 min.")
+
+    total_operations = 2
+    progress_bar = st.progress(0)
+
+    # Parallel processing for both GIFs
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_30 = executor.submit(create_gif, figures_30, "+30 mins")
+        future_60 = executor.submit(create_gif, figures_60, "+60 mins")
+
+        completed = 0
+        gifs = []
+        for future in [future_30, future_60]:
+            gifs.append(future.result())  # Block until the task completes
+            completed += 1
+            progress_bar.progress(completed / total_operations)
+            progress_placeholder.text(f"Processing GIF {completed}/{total_operations}")
+
+    progress_placeholder.empty()
+    return gifs
+
+
+def update_prediction_visualization(gt0_gif, gt6_gif, gt12_gif, pred_gif_6, pred_gif_12):
     gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60 = \
         init_prediction_visualization_layout()
     # Display the GIF using Streamlit
     gt_current.image(gt0_gif, caption="Current data", use_container_width=True)
     pred_current.empty()
-    gt_plus_30.image(gt6_gif, caption="Data +30 minutes",  use_container_width=True)
-    pred_plus_30.image(gt6_gif, caption="Prediction +30 minutes",  use_container_width=True)
-    gt_plus_60.image(gt12_gif, caption="Data +30 minutes",  use_container_width=True)
-    pred_plus_60.image(gt12_gif, caption="Prediction +60 minutes", use_container_width=True)
+    gt_plus_30.image(gt6_gif, caption="Data +30 minutes", use_container_width=True)
+    pred_plus_30.image(pred_gif_6, caption="Prediction +30 minutes", use_container_width=True)
+    gt_plus_60.image(gt12_gif, caption="Data +30 minutes", use_container_width=True)
+    pred_plus_60.image(pred_gif_12, caption="Prediction +60 minutes", use_container_width=True)
 
 
 def submit_prediction_job(sidebar_args):
@@ -160,26 +251,33 @@ def main_page(sidebar_args) -> None:
 
                         gt_array, pred_array = get_prediction_results(out_dir)
 
-                        # gt_array = gt_array[:, 0, :, :]
-                        # gt0_dict = create_figure_dict_from_array(gt_array)
+                        status.update(label="🔄 Creating dictionaries...", state="running", expanded=True)
                         gt_dict, pred_dict = create_fig_dict_in_parallel(gt_array, pred_array)
-                        status.update(label="🔄 Creating GIFs...", state="running", expanded=True)
 
+                        status.update(label="🔄 Creating GT GIFs...", state="running", expanded=True)
                         gt_gifs = create_sliding_window_gifs(gt_dict, progress_placeholder)
+                        status.update(label="🔄 Creating Pred GIFs...", state="running", expanded=True)
+                        print(pred_dict.keys())
+                        pred_gifs = create_sliding_window_gifs_for_predictions(pred_dict, progress_placeholder)
 
                         gt0_gif = gt_gifs[0]  # Full sequence
                         gt_gif_6 = gt_gifs[1]  # Starts from frame 6
                         gt_gif_12 = gt_gifs[2]  # Starts from frame 12
+                        pred_gif_6 = pred_gifs[0]
+                        pred_gif_12 = pred_gifs[1]
+
                         # Store results in session state
                         st.session_state.prediction_result = {
                             'gt0_gif': gt0_gif,
                             'gt6_gif': gt_gif_6,
                             'gt12_gif': gt_gif_12,
+                            'pred6_gif': pred_gif_6,
+                            'pred12_gif': pred_gif_12,
                         }
                         st.session_state.tab1_gif = gt0_gif.getvalue()
 
                         status.update(label=f"Done!", state="complete", expanded=True)
-                        update_prediction_visualization(gt0_gif, gt_gif_6, gt_gif_12)
+                        update_prediction_visualization(gt0_gif, gt_gif_6, gt_gif_12, pred_gif_6, pred_gif_12)
             else:
                 st.error(error)
     else:
@@ -187,7 +285,9 @@ def main_page(sidebar_args) -> None:
         gt0_gif = st.session_state.prediction_result['gt0_gif']
         gt_gif_6 = st.session_state.prediction_result['gt6_gif']
         gt_gif_12 = st.session_state.prediction_result['gt12_gif']
-        update_prediction_visualization(gt0_gif, gt_gif_6, gt_gif_12)
+        pred_gif_6 = st.session_state.prediction_result['pred6_gif']
+        pred_gif_12 = st.session_state.prediction_result['pred12_gif']
+        update_prediction_visualization(gt0_gif, gt_gif_6, gt_gif_12, pred_gif_6, pred_gif_12)
 
 
 def get_closest_5_minute_time():

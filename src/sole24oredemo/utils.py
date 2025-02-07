@@ -10,6 +10,7 @@ import numpy as np
 from mpl_toolkits.basemap import Basemap
 from numba import njit
 import warnings
+import geopandas as gpd
 
 ROOT_PATH = Path(__file__).parent.parent.absolute()
 
@@ -21,6 +22,27 @@ SHAPEFILE_FOLDER = ROOT_PATH / "shapefiles"
 
 warnings.filterwarnings('ignore', category=UserWarning,
                         message='The input coordinates to pcolormesh are interpreted as cell centers.*')
+
+
+def compute_figure_gpd(img1, timestamp):
+    global x, y
+    # gdf = gdf.to_crs(crs="EPSG:4326")
+    fig, ax = plt.subplots(figsize=(10, 10))
+    italy_shape.plot(ax=ax, edgecolor='black', color='white')
+    mesh = ax.pcolormesh(x, y, img1, shading="auto", cmap=cmap, norm=norm, vmin=None if norm else vmin,
+                         vmax=None if norm else vmax, snap=True, linewidths=0, )
+
+    # Remove the axis
+    plt.axis("off")
+
+    # Set a white background
+    fig.patch.set_facecolor("white")
+    fig.patch.set_alpha(1.0)
+
+    # Adjust the suptitle to be closer to the image
+    plt.suptitle(timestamp, y=0.92, fontsize=14)  # Adjust `y` and `fontsize` as needed
+    plt.close()
+    return fig
 
 
 def compute_figure(img1, timestamp):
@@ -429,6 +451,8 @@ def get_italian_region_shapefile() -> Path:
     return italian_regions_folder_path / filename
 
 
+lat_0 = 42.0
+lon_0 = 12.5
 cmap, norm, vmin, vmax, null_color, void_color, discrete, ticks = (
     configure_colorbar('R', min_val=None, max_val=None)
 )
@@ -436,10 +460,26 @@ destlines = 1400
 destcols = 1200
 y = np.arange(destlines).reshape(-1, 1) * np.ones((1, destcols))
 x = np.ones((destlines, 1)) * np.arange(destcols).reshape(1, -1).astype(int)
-
 y, x = lincol_2_yx(lin=y, col=x, params=par, set_center=True)
 lat, lon = yx_2_latlon(y, x, map_)
 ll_lat = 35
 ur_lat = 47
 ll_lon = 6.5
 ur_lon = 20
+
+italy_shape = gpd.read_file("/archive/SSD/home/guidim/demo_sole/src/shapefiles/italian_regions/gadm41_ITA_1.shp")
+# Define the custom Transverse Mercator projection
+custom_crs = {
+    "proj": "tmerc",  # Transverse Mercator projection
+    "lat_0": 42,  # Latitude of the origin
+    "lon_0": 12.5,  # Longitude of the origin
+    "k": 1,  # Scale factor
+    "x_0": 0,  # False easting (no shift applied)
+    "y_0": 0,  # False northing (no shift applied)
+    "datum": "WGS84",  # Geodetic datum
+    "units": "m",  # Units in meters
+    "no_defs": True  # Do not use external defaults
+}
+
+# Reproject the GeoDataFrame to the custom CRS
+italy_shape = italy_shape.to_crs(crs=custom_crs)
