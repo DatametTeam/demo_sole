@@ -1,5 +1,7 @@
 import io
 import os
+
+import emoji
 import streamlit as st
 from time import sleep
 import math
@@ -25,64 +27,71 @@ else:
     from mock import inference_mock as submit_inference, get_job_status
 
 
-def create_gif_from_saved_figures(figures_dict, progress_placeholder):
-    # Create a BytesIO buffer to hold the GIF in memory
-    buf = io.BytesIO()
-    frames = []
+def create_sliding_window_gifs(figures_dict, progress_placeholder, start_positions=[0, 6, 12]):
+    """
+    Create multiple GIFs from the same figures dictionary using sliding windows of equal length.
 
-    # Sort the dictionary by key to ensure the frames are in chronological order
+    Args:
+        figures_dict: Dictionary of figures
+        progress_placeholder: Streamlit placeholder for progress updates
+        window_size: Number of frames in each GIF (default 18)
+        start_positions: List of starting positions for each window
+
+    Returns:
+        List of BytesIO buffers containing the GIFs
+    """
+    window_size = len(figures_dict) - 12
+    gifs = []
     sorted_keys = sorted(figures_dict.keys())
-
+    total_operations = len(start_positions) * window_size
     progress_bar = st.progress(0)
+    operations_completed = 0
 
-    # Loop through the sorted keys and retrieve the corresponding figure
-    for i, key in enumerate(sorted_keys):
-        fig = figures_dict[key]  # Retrieve the figure from the dictionary
+    for start_pos in start_positions:
+        # Create a BytesIO buffer for each GIF
+        buf = io.BytesIO()
+        frames = []
 
-        progress = (i + 1) / len(sorted_keys)
-        progress_bar.progress(progress)
-        progress_placeholder.write(f"Processing frame {i + 1}/{len(sorted_keys)}")
+        # Get the window of keys for this GIF
+        window_keys = sorted_keys[start_pos:start_pos + window_size]
 
-        # Save the figure to a buffer
-        buf_tracked = io.BytesIO()
-        fig.savefig(buf_tracked, format='png', bbox_inches='tight', pad_inches=0)
-        buf_tracked.seek(0)
-        img = Image.open(buf_tracked)
-        frames.append(np.array(img))  # Append frame
+        # Process frames for current GIF
+        for i, key in enumerate(window_keys):
+            fig = figures_dict[key]
 
-    # Create the GIF with the frames
-    imageio.mimsave(buf, frames, format='GIF', fps=5, loop=0)  # Adjust duration for frame rate
-    buf.seek(0)  # Go to the start of the buffer to send it to st.image
+            # Update progress
+            operations_completed += 1
+            progress = operations_completed / total_operations
+            progress_bar.progress(progress)
+            progress_placeholder.text(f"Processing GIF {start_positions.index(start_pos) + 1}/{len(start_positions)}, "
+                                      f"frame {i + 1}/{window_size}")
+
+            # Save the figure to a buffer
+            buf_tracked = io.BytesIO()
+            fig.savefig(buf_tracked, format='png', bbox_inches='tight', pad_inches=0)
+            buf_tracked.seek(0)
+            img = Image.open(buf_tracked)
+            frames.append(np.array(img))
+
+        # Create the GIF
+        imageio.mimsave(buf, frames, format='GIF', fps=3, loop=0)
+        buf.seek(0)
+        gifs.append(buf)
+
     progress_placeholder.empty()
+    return gifs
 
-    return buf
 
-def create_figure_dict_from_array(gt_array):
-    # Initialize an empty dictionary to store the figures
-    figure_dict = {}
-
-    # Loop through the array and create a figure for each element
-    for i in range(gt_array.shape[0]):  # Assuming gt_array has shape (n_frames, height, width)
-        # Create a figure for the current frame
-        fig, ax = plt.subplots()
-        ax.imshow(gt_array[i], cmap='jet')  # Use 'jet' colormap for visualization
-        ax.axis('off')  # Turn off axis for better visual
-        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)  # Remove borders
-
-        # Save the figure in the dictionary with a key based on the index or time
-        figure_dict[f"frame_{i}"] = fig  # Use the index as the key, or modify as needed
-
-    return figure_dict
-
-def update_prediction_visualization(gt0_gif):
-    gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60 = init_prediction_visualization_layout()
+def update_prediction_visualization(gt0_gif, gt6_gif, gt12_gif):
+    gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60 = \
+        init_prediction_visualization_layout()
     # Display the GIF using Streamlit
-    gt_current.image(gt0_gif, caption="Prediction Animation", use_container_width=True)
+    gt_current.image(gt0_gif, caption="Current data", use_container_width=True)
     pred_current.empty()
-    gt_plus_30.image(gt0_gif, caption="Prediction Animation", use_container_width=True)
-    pred_plus_30.image(gt0_gif, caption="Prediction Animation", use_container_width=True)
-    gt_plus_60.image(gt0_gif, caption="Prediction Animation", use_container_width=True)
-    pred_plus_60.image(gt0_gif, caption="Prediction Animation", use_container_width=True)
+    gt_plus_30.image(gt6_gif, caption="Data +30 minutes",  use_container_width=True)
+    pred_plus_30.image(gt6_gif, caption="Prediction +30 minutes",  use_container_width=True)
+    gt_plus_60.image(gt12_gif, caption="Data +30 minutes",  use_container_width=True)
+    pred_plus_60.image(gt12_gif, caption="Prediction +60 minutes", use_container_width=True)
 
 
 def submit_prediction_job(sidebar_args):
@@ -118,13 +127,13 @@ def get_prediction_results(out_dir):
     # TODO: da fixare
     out_dir = Path("/archive/SSD/home/guidim/demo_sole/data/output/ConvLSTM/20250205/20250205/generations")
 
-    gt_array = np.load(out_dir / "data.npy", mmap_mode='r')[0:10]
+    gt_array = np.load(out_dir / "data.npy", mmap_mode='r')[0:24]
     gt_array = np.array(gt_array)
     gt_array[gt_array < 0] = 0
     gt_array[gt_array > 200] = 200
     # gt_array = (gt_array - np.min(gt_array)) / (np.max(gt_array) - np.min(gt_array))
 
-    pred_array = np.load(out_dir / "data.npy", mmap_mode='r')[0:10]
+    pred_array = np.load(out_dir / "data.npy", mmap_mode='r')[0:24]
     pred_array = np.array(pred_array)
     pred_array[pred_array < 0] = 0
     pred_array[pred_array > 200] = 200
@@ -151,26 +160,34 @@ def main_page(sidebar_args) -> None:
 
                         gt_array, pred_array = get_prediction_results(out_dir)
 
+                        # gt_array = gt_array[:, 0, :, :]
+                        # gt0_dict = create_figure_dict_from_array(gt_array)
+                        gt_dict, pred_dict = create_fig_dict_in_parallel(gt_array, pred_array)
                         status.update(label="🔄 Creating GIFs...", state="running", expanded=True)
 
-                        gt_array = gt_array[:, 0, :, :]
-                        gt0_dict = create_figure_dict_from_array(gt_array)
-                        gt0_gif = create_gif_from_saved_figures(gt0_dict, progress_placeholder)
+                        gt_gifs = create_sliding_window_gifs(gt_dict, progress_placeholder)
 
+                        gt0_gif = gt_gifs[0]  # Full sequence
+                        gt_gif_6 = gt_gifs[1]  # Starts from frame 6
+                        gt_gif_12 = gt_gifs[2]  # Starts from frame 12
                         # Store results in session state
                         st.session_state.prediction_result = {
                             'gt0_gif': gt0_gif,
+                            'gt6_gif': gt_gif_6,
+                            'gt12_gif': gt_gif_12,
                         }
                         st.session_state.tab1_gif = gt0_gif.getvalue()
 
-                        status.update(label="✅ Done!", state="complete", expanded=True)
-                        update_prediction_visualization(gt0_gif)
+                        status.update(label=f"Done!", state="complete", expanded=True)
+                        update_prediction_visualization(gt0_gif, gt_gif_6, gt_gif_12)
             else:
                 st.error(error)
     else:
         # If prediction results already exist, reuse them
         gt0_gif = st.session_state.prediction_result['gt0_gif']
-        update_prediction_visualization(gt0_gif)
+        gt_gif_6 = st.session_state.prediction_result['gt6_gif']
+        gt_gif_12 = st.session_state.prediction_result['gt12_gif']
+        update_prediction_visualization(gt0_gif, gt_gif_6, gt_gif_12)
 
 
 def get_closest_5_minute_time():
@@ -264,12 +281,11 @@ def show_home_page():
         st.write("No GIFs available yet.")
 
 
-
 def main():
     sidebar_args = configure_sidebar()
 
     # Create tabs using st.tabs
-    tab1, tab2, tab3 = st.tabs(["Home", "Prediction by Date & Time", "Tab 3"])
+    tab1, tab2 = st.tabs(["Home", "Prediction by Date & Time"])
 
     with tab1:
         main_page(sidebar_args)

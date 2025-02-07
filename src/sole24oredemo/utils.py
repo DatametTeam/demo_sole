@@ -9,6 +9,7 @@ import matplotlib.colors as mcolors
 import numpy as np
 from mpl_toolkits.basemap import Basemap
 from numba import njit
+import warnings
 
 ROOT_PATH = Path(__file__).parent.parent.absolute()
 
@@ -18,23 +19,12 @@ lon_0 = 12.5
 map_ = pyproj.Proj({"proj": 'tmerc', "lat_0": lat_0, "lon_0": lon_0})
 SHAPEFILE_FOLDER = ROOT_PATH / "shapefiles"
 
+warnings.filterwarnings('ignore', category=UserWarning,
+                        message='The input coordinates to pcolormesh are interpreted as cell centers.*')
+
 
 def compute_figure(img1, timestamp):
-    fig = plt.figure()
-    cmap, norm, vmin, vmax, null_color, void_color, discrete, ticks = (
-        configure_colorbar('R', min_val=None, max_val=None)
-    )
-    destlines = 1400
-    destcols = 1200
-    y = np.arange(destlines).reshape(-1, 1) * np.ones((1, destcols))
-    x = np.ones((destlines, 1)) * np.arange(destcols).reshape(1, -1).astype(int)
-
-    y, x = lincol_2_yx(lin=y, col=x, params=par, set_center=True)
-    lat, lon = yx_2_latlon(y, x, map_)
-    ll_lat = 35
-    ur_lat = 47
-    ll_lon = 6.5
-    ur_lon = 20
+    fig = plt.figure(figsize=(10, 8))  # Adjust figure size if needed
 
     m = Basemap(
         projection=map_.name,
@@ -49,10 +39,10 @@ def compute_figure(img1, timestamp):
 
     m.readshapefile(get_italian_region_shapefile(), "italy_regions")
 
-    # Converto le coordinate geografiche in coordinate della mappa
+    # Convert geographic coordinates to map coordinates
     x, y = m(lon, lat)
 
-    # Sovrappongo l'immagine radar alla mappa con maggiore trasparenza
+    # Overlay the radar image on the map with greater transparency
     c = m.pcolormesh(
         x,
         y,
@@ -66,7 +56,17 @@ def compute_figure(img1, timestamp):
         linewidths=0,
     )
     c.set_edgecolor("face")
-    plt.suptitle(timestamp)
+
+    # Remove the axis
+    plt.axis("off")
+
+    # Set a white background
+    fig.patch.set_facecolor("white")
+    fig.patch.set_alpha(1.0)
+
+    # Adjust the suptitle to be closer to the image
+    plt.suptitle(timestamp, y=0.92, fontsize=14)  # Adjust `y` and `fontsize` as needed
+
     return fig
 
 
@@ -427,3 +427,19 @@ def get_italian_region_shapefile() -> Path:
     files_in_folder = list(italian_regions_folder_path.glob("*"))
     filename = files_in_folder[0].stem
     return italian_regions_folder_path / filename
+
+
+cmap, norm, vmin, vmax, null_color, void_color, discrete, ticks = (
+    configure_colorbar('R', min_val=None, max_val=None)
+)
+destlines = 1400
+destcols = 1200
+y = np.arange(destlines).reshape(-1, 1) * np.ones((1, destcols))
+x = np.ones((destlines, 1)) * np.arange(destcols).reshape(1, -1).astype(int)
+
+y, x = lincol_2_yx(lin=y, col=x, params=par, set_center=True)
+lat, lon = yx_2_latlon(y, x, map_)
+ll_lat = 35
+ur_lat = 47
+ll_lon = 6.5
+ur_lon = 20
