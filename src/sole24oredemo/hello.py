@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
 from sole24oredemo.parallel_code import create_fig_dict_in_parallel
-from sole24oredemo.utils import compute_figure
+from sole24oredemo.utils import compute_figure, check_if_gif_present, load_gif_as_bytesio
 import imageio
 from datetime import datetime, timedelta
 from multiprocessing import Manager, Process, Queue
@@ -326,7 +326,7 @@ def get_prediction_results(out_dir):
 def main_page(sidebar_args) -> None:
     # Only run prediction if not already done
     if 'prediction_result' not in st.session_state:
-        submitted = sidebar_args[-1]
+        submitted = sidebar_args['submitted']
         if submitted:
             error, out_dir = submit_prediction_job(sidebar_args)
             if not error:
@@ -338,17 +338,26 @@ def main_page(sidebar_args) -> None:
                     with prediction_placeholder:
                         status.update(label="🔄 Loading results...", state="running", expanded=True)
 
-                        gt_array, pred_array = get_prediction_results(out_dir)
+                        gt_gif_ok, pred_gif_ok, gt_paths, pred_paths = check_if_gif_present(sidebar_args)
+                        if gt_gif_ok:
+                            gt_gifs = load_gif_as_bytesio(gt_paths)
+                        if pred_gif_ok:
+                            pred_gifs = load_gif_as_bytesio(pred_paths)
 
-                        status.update(label="🔄 Creating dictionaries...", state="running", expanded=True)
-                        gt_dict, pred_dict = create_fig_dict_in_parallel(gt_array, pred_array)
+                        if not gt_gif_ok or not pred_gif_ok:
+                            gt_array, pred_array = get_prediction_results(out_dir)
 
-                        status.update(label="🔄 Creating GT GIFs...", state="running", expanded=True)
-                        gt_gifs = create_sliding_window_gifs(gt_dict, progress_placeholder, fps_gif=3,
-                                                             save_on_disk=True)
-                        status.update(label="🔄 Creating Pred GIFs...", state="running", expanded=True)
-                        pred_gifs = create_sliding_window_gifs_for_predictions(pred_dict, progress_placeholder,
-                                                                               fps_gif=3, save_on_disk=True)
+                            status.update(label="🔄 Creating dictionaries...", state="running", expanded=True)
+                            gt_dict, pred_dict = create_fig_dict_in_parallel(gt_array, pred_array)
+
+                            if not gt_gif_ok:
+                                status.update(label="🔄 Creating GT GIFs...", state="running", expanded=True)
+                                gt_gifs = create_sliding_window_gifs(gt_dict, progress_placeholder, fps_gif=3,
+                                                                     save_on_disk=True)
+                            if not pred_gif_ok:
+                                status.update(label="🔄 Creating Pred GIFs...", state="running", expanded=True)
+                                pred_gifs = create_sliding_window_gifs_for_predictions(pred_dict, progress_placeholder,
+                                                                                       fps_gif=3, save_on_disk=True)
 
                         gt0_gif = gt_gifs[0]  # Full sequence
                         gt_gif_6 = gt_gifs[1]  # Starts from frame 6

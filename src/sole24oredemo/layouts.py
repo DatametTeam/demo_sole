@@ -1,16 +1,37 @@
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, time, timedelta
 
 
 def configure_sidebar():
     with st.sidebar:
         st.markdown("<h1 style='font-size: 32px; font-weight: bold;'>NOWCASTING</h1>", unsafe_allow_html=True)
         with st.form("weather_prediction_form"):
-            start_date = st.date_input("Select a start date", value=datetime.now())
-            end_date = st.date_input("Select an end date", value=datetime.now())
+            # Date inputs
+            start_date = st.date_input("Select a start date", value=datetime(2025, 1, 31).date(),
+                                       format="DD/MM/YYYY")  # TODO: rimettere now
+            # Time inputs
+            start_time = st.time_input(
+                "Select a start time",
+                value=time(0, 0),
+                step=timedelta(minutes=5)  # 5-minute intervals
+            )
+            end_date = st.date_input("Select an end date", value=datetime(2025, 1, 31).date(),
+                                     format="DD/MM/YYYY")  # TODO: da rimettere now
+
+            end_time = st.time_input(
+                "Select an end time",
+                value=time(1, 55),
+                step=timedelta(minutes=5)  # 5-minute intervals
+            )
+
+            # Model selection
             model_name = st.selectbox("Select a model", ("ConvLSTM", "SmAtUnet"))
+
+            # Form submission
             submitted = st.form_submit_button("Submit", type="primary", use_container_width=True)
-        return start_date, end_date, model_name, submitted
+
+        return {"start_date": start_date, "end_date": end_date, "start_time": start_time, "end_time": end_time,
+                "model_name": model_name, "submitted": submitted}
 
 
 def init_prediction_visualization_layout():
@@ -25,7 +46,8 @@ def init_prediction_visualization_layout():
         # Row 1: +30 min
         st.markdown(
             """
-            <div style="height: 100px; display: flex; justify-content: center; align-items: center; transform: rotate(270deg);">
+            <div style="height: 100px; display: flex; justify-content: center; align-items: center; transform: 
+            rotate(270deg);">
                 +30 min
             </div>
             """,
@@ -34,7 +56,8 @@ def init_prediction_visualization_layout():
         # Row 2: +60 min
         st.markdown(
             """
-            <div style="height: 100px; display: flex; justify-content: center; align-items: center; transform: rotate(270deg);">
+            <div style="height: 100px; display: flex; justify-content: center; align-items: center; transform: 
+            rotate(270deg);">
                 +60 min
             </div>
             """,

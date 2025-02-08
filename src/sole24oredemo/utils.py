@@ -11,6 +11,7 @@ from mpl_toolkits.basemap import Basemap
 from numba import njit
 import warnings
 import geopandas as gpd
+from datetime import datetime, timedelta
 
 ROOT_PATH = Path(__file__).parent.parent.absolute()
 
@@ -449,6 +450,65 @@ def get_italian_region_shapefile() -> Path:
     files_in_folder = list(italian_regions_folder_path.glob("*"))
     filename = files_in_folder[0].stem
     return italian_regions_folder_path / filename
+
+
+def check_if_gif_present(sidebar_args):
+    gif_dir = "/archive/SSD/home/guidim/demo_sole/data/output/gifs"
+    start_date = sidebar_args['start_date']
+    start_time = sidebar_args['start_time']
+
+    # Generate datetime objects for start, +30 mins, and +60 mins
+    start_datetime = datetime.combine(start_date, start_time)
+    datetime_plus_30 = start_datetime + timedelta(minutes=30)
+    datetime_plus_60 = start_datetime + timedelta(minutes=60)
+
+    # File names for groundtruths
+    groundtruth_files = [
+        f"{start_datetime.strftime('%d%m%Y_%H%M')}_"
+        f"{(start_datetime + timedelta(minutes=55)).strftime('%d%m%Y_%H%M')}.gif",
+        f"{datetime_plus_30.strftime('%d%m%Y_%H%M')}_"
+        f"{(datetime_plus_30 + timedelta(minutes=55)).strftime('%d%m%Y_%H%M')}.gif",
+        f"{datetime_plus_60.strftime('%d%m%Y_%H%M')}_"
+        f"{(datetime_plus_60 + timedelta(minutes=55)).strftime('%d%m%Y_%H%M')}.gif"
+    ]
+
+    # File names for predictions
+    prediction_files = [
+        f"{start_datetime.strftime('%d%m%Y_%H%M')}_"
+        f"{(start_datetime + timedelta(minutes=55)).strftime('%d%m%Y_%H%M')}_+30 mins.gif",
+        f"{start_datetime.strftime('%d%m%Y_%H%M')}_"
+        f"{(start_datetime + timedelta(minutes=55)).strftime('%d%m%Y_%H%M')}_+60 mins.gif"
+    ]
+
+    groundtruth_paths = [os.path.join(gif_dir, 'gt', file) for file in groundtruth_files]
+    prediction_paths = [os.path.join(gif_dir, 'pred', file) for file in prediction_files]
+
+    # Check presence of groundtruth files
+    groundtruth_present = all(os.path.exists(path) for path in groundtruth_paths)
+
+    # Check presence of prediction files
+    prediction_present = all(os.path.exists(path) for path in prediction_paths)
+
+    return groundtruth_present, prediction_present, groundtruth_paths, prediction_paths
+
+
+def load_gif_as_bytesio(gif_paths):
+    """
+    Loads a GIF from a specified path into an io.BytesIO object.
+
+    Args:
+        gif_path (str): Path to the GIF file.
+
+    Returns:
+        list: In-memory binary representation of the GIF.
+    """
+    gifs = []
+    for gif_path in gif_paths:
+        with open(gif_path, "rb") as f:
+            gif_data = f.read()
+        gifs.append(io.BytesIO(gif_data))
+
+    return gifs
 
 
 lat_0 = 42.0
