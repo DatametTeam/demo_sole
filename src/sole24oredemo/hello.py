@@ -20,6 +20,7 @@ from sole24oredemo.utils import compute_figure, check_if_gif_present, load_gif_a
 import imageio
 from datetime import datetime, timedelta
 from multiprocessing import Manager, Process, Queue
+from streamlit_extras.stylable_container import stylable_container
 
 st.set_page_config(page_title="Weather prediction", page_icon=":flag-eu:", layout="wide")
 
@@ -323,11 +324,108 @@ def get_prediction_results(out_dir):
     return gt_array, pred_array
 
 
+def compute_prediction_results(sidebar_args):
+    error, out_dir = submit_prediction_job(sidebar_args)
+    if not error:
+        with st.status(f':hammer_and_wrench: **Loading results...**', expanded=True) as status:
+
+            prediction_placeholder = st.empty()
+            progress_placeholder = st.empty()  # Add this line for progress bar
+
+            with prediction_placeholder:
+                status.update(label="🔄 Loading results...", state="running", expanded=True)
+
+                gt_gif_ok, pred_gif_ok, gt_paths, pred_paths = check_if_gif_present(sidebar_args)
+                if gt_gif_ok:
+                    gt_gifs = load_gif_as_bytesio(gt_paths)
+
+                gt_array, pred_array = get_prediction_results(out_dir)
+
+                status.update(label="🔄 Creating dictionaries...", state="running", expanded=True)
+                gt_dict, pred_dict = create_fig_dict_in_parallel(gt_array, pred_array)
+
+                if not gt_gif_ok:
+                    status.update(label="🔄 Creating GT GIFs...", state="running", expanded=True)
+                    gt_gifs = create_sliding_window_gifs(gt_dict, progress_placeholder, fps_gif=3,
+                                                         save_on_disk=True)
+
+                status.update(label="🔄 Creating Pred GIFs...", state="running", expanded=True)
+                pred_gifs = create_sliding_window_gifs_for_predictions(pred_dict, progress_placeholder,
+                                                                       fps_gif=3, save_on_disk=True)
+
+                gt0_gif = gt_gifs[0]  # Full sequence
+                gt_gif_6 = gt_gifs[1]  # Starts from frame 6
+                gt_gif_12 = gt_gifs[2]  # Starts from frame 12
+                pred_gif_6 = pred_gifs[0]
+                pred_gif_12 = pred_gifs[1]
+
+                # Store results in session state
+                st.session_state.prediction_result = {
+                    'gt0_gif': gt0_gif,
+                    'gt6_gif': gt_gif_6,
+                    'gt12_gif': gt_gif_12,
+                    'pred6_gif': pred_gif_6,
+                    'pred12_gif': pred_gif_12,
+                }
+                st.session_state.tab1_gif = gt0_gif.getvalue()
+
+                status.update(label=f"Done!", state="complete", expanded=True)
+                update_prediction_visualization(gt0_gif, gt_gif_6, gt_gif_12, pred_gif_6, pred_gif_12)
+                display_results(gt_gifs, pred_gifs)
+    else:
+        st.error(error)
+
+
+def display_results(gt_gifs, pred_gifs):
+    gt0_gif = gt_gifs[0]  # Full sequence
+    gt_gif_6 = gt_gifs[1]  # Starts from frame 6
+    gt_gif_12 = gt_gifs[2]  # Starts from frame 12
+    pred_gif_6 = pred_gifs[0]
+    pred_gif_12 = pred_gifs[1]
+
+    # Store results in session state
+    st.session_state.prediction_result = {
+        'gt0_gif': gt0_gif,
+        'gt6_gif': gt_gif_6,
+        'gt12_gif': gt_gif_12,
+        'pred6_gif': pred_gif_6,
+        'pred12_gif': pred_gif_12,
+    }
+    st.session_state.tab1_gif = gt0_gif.getvalue()
+    update_prediction_visualization(gt0_gif, gt_gif_6, gt_gif_12, pred_gif_6, pred_gif_12)
+
+
 def main_page(sidebar_args) -> None:
     # Only run prediction if not already done
-    if 'prediction_result' not in st.session_state:
-        submitted = sidebar_args['submitted']
-        if submitted:
+    if 'prediction_result' not in st.session_state or st.session_state.prediction_result == {}:
+        if 'submitted' not in st.session_state:
+            submitted = sidebar_args['submitted']
+            if submitted:
+                st.session_state.submitted = True
+        if 'submitted' in st.session_state and st.session_state.submitted:
+
+            gt_gif_ok, pred_gif_ok, gt_paths, pred_paths = check_if_gif_present(sidebar_args)
+
+            if gt_gif_ok and pred_gif_ok:
+                st.warning("Prediction data already present. Do you want to recompute?")
+                col1, _, col2, _ = st.columns([1, 0.5, 1, 3])  # Ensure both buttons take half the page
+                with col1:
+                    compute_ok = False
+                    if st.button("YES", use_container_width=True):
+                        compute_ok = True
+                if compute_ok:
+                    compute_prediction_results(sidebar_args)
+
+                with col2:
+                    compute_nok = False
+                    if st.button("NO", use_container_width=True):
+                        compute_nok = True
+                if compute_nok:
+                    gt_gifs = load_gif_as_bytesio(gt_paths)
+                    pred_gifs = load_gif_as_bytesio(pred_paths)
+                    display_results(gt_gifs, pred_gifs)
+
+            return
             error, out_dir = submit_prediction_job(sidebar_args)
             if not error:
                 with st.status(f':hammer_and_wrench: **Loading results...**', expanded=True) as status:
@@ -482,6 +580,8 @@ def show_home_page():
 
 def main():
     sidebar_args = configure_sidebar()
+    if sidebar_args['submitted'] and 'prediction_result' in st.session_state:
+        st.session_state.prediction_result = {}
 
     # Create tabs using st.tabs
     tab1, tab2 = st.tabs(["Home", "Prediction by Date & Time"])
@@ -540,4 +640,5 @@ pred_dict = {
 }
 
 if __name__ == "__main__":
+    print("***NEWRUN***")
     main()
