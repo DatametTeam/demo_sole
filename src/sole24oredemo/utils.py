@@ -46,53 +46,6 @@ def compute_figure_gpd(img1, timestamp):
     return fig
 
 
-def compute_figure(img1, timestamp):
-    fig = plt.figure(figsize=(10, 8))  # Adjust figure size if needed
-
-    m = Basemap(
-        projection=map_.name,
-        llcrnrlat=ll_lat,
-        urcrnrlat=ur_lat,
-        llcrnrlon=ll_lon,
-        urcrnrlon=ur_lon,
-        lat_0=lat_0,
-        lon_0=lon_0,
-        resolution="c",
-    )
-
-    m.readshapefile(get_italian_region_shapefile(), "italy_regions")
-
-    # Convert geographic coordinates to map coordinates
-    x, y = m(lon, lat)
-
-    # Overlay the radar image on the map with greater transparency
-    c = m.pcolormesh(
-        x,
-        y,
-        img1,
-        shading="auto",
-        cmap=cmap,
-        norm=norm,
-        vmin=None if norm else vmin,
-        vmax=None if norm else vmax,
-        snap=True,
-        linewidths=0,
-    )
-    c.set_edgecolor("face")
-
-    # Remove the axis
-    plt.axis("off")
-
-    # Set a white background
-    fig.patch.set_facecolor("white")
-    fig.patch.set_alpha(1.0)
-
-    # Adjust the suptitle to be closer to the image
-    plt.suptitle(timestamp, y=0.92, fontsize=14)  # Adjust `y` and `fontsize` as needed
-
-    return fig
-
-
 def get_legend_data(filepath) -> dict:
     legend_data = {
         "Thresh": [],
@@ -533,6 +486,45 @@ def create_colorbar_fig(top_adj=None, bot_adj=None):
 
     # Show the plot
     return buf
+
+
+def get_closest_5_minute_time():
+    now = datetime.now()
+    # Calculate the number of minutes past the closest earlier 5-minute mark
+    minutes = now.minute - (now.minute % 5)
+    return now.replace(minute=minutes, second=0, microsecond=0).time()
+
+
+def read_groundtruth_and_target_data(selected_key):
+    # Define output directory and load arrays
+    out_dir = Path("/archive/SSD/home/guidim/demo_sole/data/output/ConvLSTM/20250205/20250205/generations")
+    gt_array = np.load(out_dir / "data.npy", mmap_mode='r')[0:12,0]
+    pred_array = np.load(out_dir / "data.npy", mmap_mode='r')[12:24,0]
+
+    # Clean and normalize arrays
+    gt_array = np.clip(gt_array, 0, 200)
+    pred_array = np.clip(pred_array, 0, 200)
+
+    # Convert selected_key to a datetime object
+    selected_time = datetime.strptime(selected_key, "%d%m%Y_%H%M")
+
+    # Create dictionaries for ground truth and predictions
+    gt_dict = {}
+    pred_dict = {}
+
+    # Fill ground truth dictionary
+    for i in range(len(gt_array)):
+        timestamp = (selected_time + timedelta(minutes=5 * i)).strftime("%d%m%Y_%H%M")
+        gt_dict[timestamp] = gt_array[i]
+
+    # Adjust start time for predictions (60 minutes later)
+    pred_start_time = selected_time + timedelta(minutes=5 * 12)
+    for i in range(len(pred_array)):
+        timestamp = (pred_start_time + timedelta(minutes=5 * i)).strftime("%d%m%Y_%H%M")
+        pred_dict[timestamp] = pred_array[i]
+
+    return gt_dict, pred_dict
+
 
 
 lat_0 = 42.0

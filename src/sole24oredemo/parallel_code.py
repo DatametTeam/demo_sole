@@ -8,7 +8,7 @@ from functools import partial
 import numpy as np
 import streamlit as st
 from matplotlib import pyplot as plt
-from sole24oredemo.utils import compute_figure, compute_figure_gpd
+from sole24oredemo.utils import compute_figure_gpd
 
 
 def create_fig_dict_in_parallel(gt_data, pred_data, save_on_disk=False):

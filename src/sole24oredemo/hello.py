@@ -1,26 +1,19 @@
 import io
 import os
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-
-import emoji
 import streamlit as st
-from time import sleep
-import math
 from PIL import Image
 from pathlib import Path
 import time
 import numpy as np
-from layouts import configure_sidebar, init_prediction_visualization_layout
+from layouts import configure_sidebar, init_prediction_visualization_layout, init_second_tab_layout
 from pbs import is_pbs_available
-import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
 
 from sole24oredemo.parallel_code import create_fig_dict_in_parallel
-from sole24oredemo.utils import compute_figure, check_if_gif_present, load_gif_as_bytesio, create_colorbar_fig
+from sole24oredemo.utils import check_if_gif_present, load_gif_as_bytesio, create_colorbar_fig, \
+    get_closest_5_minute_time, read_groundtruth_and_target_data
 import imageio
-from datetime import datetime, timedelta
-from multiprocessing import Manager, Process, Queue
-from streamlit_extras.stylable_container import stylable_container
+from datetime import datetime, time, timedelta
+from multiprocessing import Manager, Process
 
 st.set_page_config(page_title="Weather prediction", page_icon=":flag-eu:", layout="wide")
 
@@ -440,84 +433,23 @@ def main_page(sidebar_args) -> None:
         update_prediction_visualization(gt0_gif, gt_gif_6, gt_gif_12, pred_gif_6, pred_gif_12)
 
 
-def get_closest_5_minute_time():
-    now = datetime.now()
-    # Calculate the number of minutes past the closest earlier 5-minute mark
-    minutes = now.minute - (now.minute % 5)
-    return now.replace(minute=minutes, second=0, microsecond=0).time()
-
-
 def show_prediction_page():
     st.title("Select Date and Time for Prediction")
 
     # Date and time selection
     selected_date = st.date_input(
-        "Select Date", min_value=datetime(2020, 1, 1).date(), max_value=datetime.today().date()
-    )
-    selected_time = st.time_input("Select Time", get_closest_5_minute_time())
+        "Select Date", min_value=datetime(2020, 1, 1).date(), max_value=datetime.today().date(), format="DD/MM/YYYY",
+        value=datetime(2025, 2, 6).date())
+    selected_time = st.time_input("Select Time", value=time(15, 00))  # get_closest_5_minute_time(), s
 
     if st.button("Submit"):
         # Combine selected date and time
         selected_datetime = datetime.combine(selected_date, selected_time)
-        selected_key = selected_datetime.strftime("%Y-%m-%d_%H:%M")
+        selected_key = selected_datetime.strftime("%d%m%Y_%H%M")
 
-        # Prepare ground truth frames
-        groundtruth_frames = []
-        for i in range(12):
-            frame_time = selected_datetime - timedelta(minutes=5 * (12 - i - 1))
-            frame_key = frame_time.strftime("%Y-%m-%d_%H:%M")
-            if frame_key in groundtruth_dict:
-                groundtruth_frames.append(groundtruth_dict[frame_key])
-            else:
-                groundtruth_frames.append(None)  # Placeholder for missing frames
+        groundtruth_dict, target_dict = read_groundtruth_and_target_data(selected_key)
 
-        # Prepare target frames
-        target_frames = []
-        for i in range(12):
-            frame_time = selected_datetime + timedelta(minutes=5 * (i + 1))
-            frame_key = frame_time.strftime("%Y-%m-%d_%H:%M")
-            if frame_key in groundtruth_dict:
-                target_frames.append(groundtruth_dict[frame_key])
-            else:
-                target_frames.append(None)  # Placeholder for missing frames
-
-        # Prepare prediction frames
-        pred_frames = []
-        if selected_key in pred_dict:
-            for offset, pred_frame in pred_dict[selected_key].items():
-                pred_frames.append(pred_frame)
-        while len(pred_frames) < 12:
-            pred_frames.append(None)  # Fill missing frames
-
-        # Create 3 columns
-        cols = st.columns(3)
-
-        # Groundtruth column
-        with cols[0]:
-            st.markdown("<h5 style='font-size:14px;'>Groundtruth</h5>", unsafe_allow_html=True)
-            for frame in groundtruth_frames:
-                if frame is not None:
-                    st.image((frame * 255).astype(np.uint8), use_container_width=True)
-                else:
-                    st.text("Missing Frame")
-
-        # Target column
-        with cols[1]:
-            st.markdown("<h5 style='font-size:14px;'>Target</h5>", unsafe_allow_html=True)
-            for frame in target_frames:
-                if frame is not None:
-                    st.image((frame * 255).astype(np.uint8), use_container_width=True)
-                else:
-                    st.text("Missing Frame")
-
-        # Prediction column
-        with cols[2]:
-            st.markdown("<h5 style='font-size:14px;'>Prediction</h5>", unsafe_allow_html=True)
-            for frame in pred_frames:
-                if frame is not None:
-                    st.image((frame * 255).astype(np.uint8), use_container_width=True)
-                else:
-                    st.text("Missing Frame")
+        init_second_tab_layout(groundtruth_dict, target_dict, target_dict)
 
 
 def show_home_page():
@@ -545,52 +477,6 @@ def main():
     with tab2:
         show_prediction_page()
 
-
-# Dummy dictionaries for ground truth and predictions
-groundtruth_dict = {
-    "2025-02-06_14:00": np.random.rand(1400, 1200),
-    "2025-02-06_14:05": np.random.rand(1400, 1200),
-    "2025-02-06_14:10": np.random.rand(1400, 1200),
-    "2025-02-06_14:15": np.random.rand(1400, 1200),
-    "2025-02-06_14:20": np.random.rand(1400, 1200),
-    "2025-02-06_14:25": np.random.rand(1400, 1200),
-    "2025-02-06_14:30": np.random.rand(1400, 1200),
-    "2025-02-06_14:35": np.random.rand(1400, 1200),
-    "2025-02-06_14:40": np.random.rand(1400, 1200),
-    "2025-02-06_14:45": np.random.rand(1400, 1200),
-    "2025-02-06_14:50": np.random.rand(1400, 1200),
-    "2025-02-06_14:55": np.random.rand(1400, 1200),
-    "2025-02-06_15:00": np.random.rand(1400, 1200),
-    "2025-02-06_15:05": np.random.rand(1400, 1200),
-    "2025-02-06_15:10": np.random.rand(1400, 1200),
-    "2025-02-06_15:15": np.random.rand(1400, 1200),
-    "2025-02-06_15:20": np.random.rand(1400, 1200),
-    "2025-02-06_15:25": np.random.rand(1400, 1200),
-    "2025-02-06_15:30": np.random.rand(1400, 1200),
-    "2025-02-06_15:35": np.random.rand(1400, 1200),
-    "2025-02-06_15:40": np.random.rand(1400, 1200),
-    "2025-02-06_15:45": np.random.rand(1400, 1200),
-    "2025-02-06_15:50": np.random.rand(1400, 1200),
-    "2025-02-06_15:55": np.random.rand(1400, 1200),
-    "2025-02-06_16:00": np.random.rand(1400, 1200),
-}
-pred_dict = {
-    "2025-02-06_15:00": {
-        "+5mins": np.random.rand(1400, 1200),
-        "+10mins": np.random.rand(1400, 1200),
-        "+15mins": np.random.rand(1400, 1200),
-        "+20mins": np.random.rand(1400, 1200),
-        "+25mins": np.random.rand(1400, 1200),
-        "+30mins": np.random.rand(1400, 1200),
-        "+35mins": np.random.rand(1400, 1200),
-        "+40mins": np.random.rand(1400, 1200),
-        "+45mins": np.random.rand(1400, 1200),
-        "+50mins": np.random.rand(1400, 1200),
-        "+55mins": np.random.rand(1400, 1200),
-        "+60mins": np.random.rand(1400, 1200),
-    },
-    # Add more date-time entries for predictions
-}
 
 if __name__ == "__main__":
     print("***NEWRUN***")
