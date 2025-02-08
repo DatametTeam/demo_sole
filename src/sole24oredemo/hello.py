@@ -14,6 +14,8 @@ from sole24oredemo.utils import check_if_gif_present, load_gif_as_bytesio, creat
 import imageio
 from datetime import datetime, time, timedelta
 from multiprocessing import Manager, Process
+import folium
+from streamlit_folium import st_folium
 
 st.set_page_config(page_title="Weather prediction", page_icon=":flag-eu:", layout="wide")
 
@@ -463,19 +465,36 @@ def show_home_page():
         st.write("No GIFs available yet.")
 
 
+def show_real_time_prediction():
+    map = folium.Map(location=[45.0, 7.0], zoom_start=10)  # Specify a location and zoom level
+
+    # Add a marker for demonstration purposes
+    folium.Marker(
+        location=[45.0, 7.0],
+        popup="Demo Location",
+        icon=folium.Icon(color="blue", icon="info-sign"),
+    ).add_to(map)
+
+    # Display the map in Streamlit
+    st_map = st_folium(map, width=700, height=500)
+
+
 def main():
     sidebar_args = configure_sidebar()
     if sidebar_args['submitted'] and 'prediction_result' in st.session_state:
         st.session_state.prediction_result = {}
 
     # Create tabs using st.tabs
-    tab1, tab2 = st.tabs(["Home", "Prediction by Date & Time"])
+    tab1, tab2, tab3 = st.tabs(["Home", "Prediction by Date & Time", "Real Time Prediction"])
 
     with tab1:
         main_page(sidebar_args)
 
     with tab2:
         show_prediction_page()
+    
+    with tab3:
+        show_real_time_prediction()
 
 
 if __name__ == "__main__":
