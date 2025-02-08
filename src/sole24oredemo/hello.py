@@ -29,13 +29,16 @@ else:
     from mock import inference_mock as submit_inference, get_job_status
 
 
-def create_single_gif_for_parallel(queue, start_pos, figures_dict, window_size, sorted_keys, process_idx):
+def create_single_gif_for_parallel(queue, start_pos, figures_dict, window_size, sorted_keys, process_idx,
+                                   save_on_disk=True, fps_gif=3):
     """
     Create a single GIF and send progress updates through a queue.
     """
     buf = io.BytesIO()
     frames = []
+    print(f"{start_pos} / {start_pos + window_size}")
     window_keys = sorted_keys[start_pos:start_pos + window_size]
+    print(window_keys)
 
     for i, key in enumerate(window_keys):
         fig = figures_dict[key]
@@ -49,13 +52,21 @@ def create_single_gif_for_parallel(queue, start_pos, figures_dict, window_size, 
         progress = (i + 1) / len(window_keys)
         queue.put(('progress', process_idx, progress))
 
-    imageio.mimsave(buf, frames, format='GIF', fps=3, loop=0)
+    imageio.mimsave(buf, frames, format='GIF', fps=fps_gif, loop=0)
     buf.seek(0)
     # Send completed GIF through queue
     queue.put(('complete', process_idx, buf.getvalue()))
 
+    if save_on_disk:
+        save_path = "/archive/SSD/home/guidim/demo_sole/data/output/gifs/gt"
+        file_name = f"{window_keys[0]}_{window_keys[-1]}"
+        save_path = os.path.join(save_path, file_name + '.gif')
+        imageio.mimsave(save_path, frames, format='GIF', fps=fps_gif, loop=0)
+        print(f"GIF save @ path {save_path}")
 
-def create_sliding_window_gifs(figures_dict, progress_placeholder, start_positions=[0, 6, 12]):
+
+def create_sliding_window_gifs(figures_dict, progress_placeholder, start_positions=[0, 6, 12], save_on_disk=True,
+                               fps_gif=3):
     """
     Create multiple GIFs in parallel with progress tracking.
     """
@@ -77,7 +88,7 @@ def create_sliding_window_gifs(figures_dict, progress_placeholder, start_positio
     for idx, start_pos in enumerate(start_positions):
         p = Process(
             target=create_single_gif_for_parallel,
-            args=(queue, start_pos, figures_dict, window_size, sorted_keys, idx)
+            args=(queue, start_pos, figures_dict, window_size, sorted_keys, idx, save_on_disk, fps_gif)
         )
         processes.append(p)
 
@@ -123,7 +134,7 @@ def create_sliding_window_gifs(figures_dict, progress_placeholder, start_positio
     return completed_gifs
 
 
-def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeholder):
+def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeholder, save_on_disk=True, fps_gif=3):
     """
     Create GIFs for the predictions dictionary. Each GIF corresponds to:
     - +30 mins: Figures from the "+30mins" key in the nested dictionary.
@@ -138,7 +149,7 @@ def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeho
         Tuple of BytesIO buffers containing the two GIFs (+30 mins, +60 mins).
     """
 
-    def create_single_gif(queue, figures, gif_type, process_idx):
+    def create_single_gif(queue, figures, gif_type, process_idx, start_key, end_key, fps_gif=3, save_on_disk=True):
         buf = io.BytesIO()
         frames = []
 
@@ -162,9 +173,16 @@ def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeho
             raise ValueError(f"No frames generated for {gif_type}.")
 
         # Create the GIF
-        imageio.mimsave(buf, frames, format='GIF', fps=3, loop=0)
+        imageio.mimsave(buf, frames, format='GIF', fps=fps_gif, loop=0)
         buf.seek(0)
         queue.put(('complete', process_idx, buf.getvalue()))
+
+        if save_on_disk:
+            save_path = "/archive/SSD/home/guidim/demo_sole/data/output/gifs/pred"
+            file_name = f"{start_key}_{end_key}_{gif_type}"
+            save_path = os.path.join(save_path, file_name + '.gif')
+            imageio.mimsave(save_path, frames, format='GIF', fps=fps_gif, loop=0)
+            print(f"GIF save @ path {save_path}")
 
     sorted_keys = sorted(prediction_dict.keys())
 
@@ -177,6 +195,8 @@ def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeho
     # Extract figures for +30 mins and +60 mins
     figures_30 = [nested_dict["+30min"] for nested_dict in prediction_dict.values() if "+30min" in nested_dict]
     figures_60 = [nested_dict["+60min"] for nested_dict in prediction_dict.values() if "+60min" in nested_dict]
+    start_key = keys_except_last_12[0]
+    end_key = keys_except_last_12[-1]
 
     if not figures_30 or not figures_60:
         raise ValueError("Insufficient figures for +30 min or +60 min.")
@@ -195,7 +215,8 @@ def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeho
     processes = []
 
     for idx, (figures, gif_type) in enumerate([(figures_30, "+30 mins"), (figures_60, "+60 mins")]):
-        p = Process(target=create_single_gif, args=(queue, figures, gif_type, idx))
+        p = Process(target=create_single_gif,
+                    args=(queue, figures, gif_type, idx, start_key, end_key, fps_gif, save_on_disk))
         processes.append(p)
 
     # Start all processes
@@ -246,10 +267,10 @@ def update_prediction_visualization(gt0_gif, gt6_gif, gt12_gif, pred_gif_6, pred
         init_prediction_visualization_layout()
     # Display the GIF using Streamlit
     gt_current.image(gt0_gif, caption="Current data", use_container_width=True)
-    pred_current.empty()
+    pred_current.image(gt0_gif, caption="Current data", use_container_width=True)
     gt_plus_30.image(gt6_gif, caption="Data +30 minutes", use_container_width=True)
     pred_plus_30.image(pred_gif_6, caption="Prediction +30 minutes", use_container_width=True)
-    gt_plus_60.image(gt12_gif, caption="Data +30 minutes", use_container_width=True)
+    gt_plus_60.image(gt12_gif, caption="Data +60 minutes", use_container_width=True)
     pred_plus_60.image(pred_gif_12, caption="Prediction +60 minutes", use_container_width=True)
 
 
@@ -323,10 +344,11 @@ def main_page(sidebar_args) -> None:
                         gt_dict, pred_dict = create_fig_dict_in_parallel(gt_array, pred_array)
 
                         status.update(label="🔄 Creating GT GIFs...", state="running", expanded=True)
-                        gt_gifs = create_sliding_window_gifs(gt_dict, progress_placeholder)
+                        gt_gifs = create_sliding_window_gifs(gt_dict, progress_placeholder, fps_gif=3,
+                                                             save_on_disk=True)
                         status.update(label="🔄 Creating Pred GIFs...", state="running", expanded=True)
-                        print(pred_dict.keys())
-                        pred_gifs = create_sliding_window_gifs_for_predictions(pred_dict, progress_placeholder)
+                        pred_gifs = create_sliding_window_gifs_for_predictions(pred_dict, progress_placeholder,
+                                                                               fps_gif=3, save_on_disk=True)
 
                         gt0_gif = gt_gifs[0]  # Full sequence
                         gt_gif_6 = gt_gifs[1]  # Starts from frame 6

@@ -88,8 +88,8 @@ def save_prediction_sequence(data_series, element_index, base_date, time_step, o
         if timestamp_offset not in [30, 60]:
             continue  # Skip if timestamp_offset is not 30 or 60
 
-        fig = compute_figure_gpd(sequence, (element_timestamp + timedelta(minutes=timestamp_offset)).strftime(
-            '%d-%m-%Y %H:%M'))  # Compute figure
+        fig = compute_figure_gpd(sequence, ('PRED @ ' + (element_timestamp + timedelta(minutes=timestamp_offset)).strftime(
+            '%d-%m-%Y %H:%M')))  # Compute figure
 
         if save_on_disk:
             folder_path = os.path.join(out_dir, 'pred', folder_name)
