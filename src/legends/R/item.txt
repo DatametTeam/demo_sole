@@ -1,0 +1,12 @@
+position    = 0.9 0.68
+Glyph_Width    = 1.5
+Gap    = 0.5
+Outline_Color    = 255 255 255
+Outline_Thick    = 1.0
+Show_Outline    =            0
+Text_Color    = 255 255 255
+mode  = legend
+color = 255 255 255
+font  = Helvetica
+size  = 14
+title = mm/h

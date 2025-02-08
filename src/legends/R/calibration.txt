@@ -1,0 +1,9 @@
+parname = R
+unit    = mm/h
+scaling = 6
+minVal  = 0
+maxVal  = 300
+voidInd =  
+nullInd = 0
+-fnull   = 1000
+-bitplanes = 10

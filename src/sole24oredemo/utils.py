@@ -511,6 +511,30 @@ def load_gif_as_bytesio(gif_paths):
     return gifs
 
 
+def create_colorbar_fig(top_adj=None, bot_adj=None):
+    # Create a figure
+    fig, ax = plt.subplots(figsize=(2, 25))  # Adjust the figsize as needed
+    fig.subplots_adjust(right=0.5, top=top_adj, bottom=bot_adj)
+
+    # Create a colorbar
+    cbar = fig.colorbar(
+        plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+        cax=ax,
+        orientation='vertical',
+        ticks=ticks, )
+
+    cbar.ax.tick_params(labelsize=25, length=10, width=3)  # Larger ticks and labels
+    product_unit = "mm/h"
+    cbar.ax.set_title(product_unit, fontsize=30, pad=50)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", )  # bbox_inches="tight")
+    buf.seek(0)
+
+    # Show the plot
+    return buf
+
+
 lat_0 = 42.0
 lon_0 = 12.5
 cmap, norm, vmin, vmax, null_color, void_color, discrete, ticks = (

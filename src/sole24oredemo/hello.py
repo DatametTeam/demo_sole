@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
 from sole24oredemo.parallel_code import create_fig_dict_in_parallel
-from sole24oredemo.utils import compute_figure, check_if_gif_present, load_gif_as_bytesio
+from sole24oredemo.utils import compute_figure, check_if_gif_present, load_gif_as_bytesio, create_colorbar_fig
 import imageio
 from datetime import datetime, timedelta
 from multiprocessing import Manager, Process, Queue
@@ -264,7 +264,7 @@ def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeho
 
 
 def update_prediction_visualization(gt0_gif, gt6_gif, gt12_gif, pred_gif_6, pred_gif_12):
-    gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60 = \
+    gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60, colorbar30, colorbar60 = \
         init_prediction_visualization_layout()
     # Display the GIF using Streamlit
     gt_current.image(gt0_gif, caption="Current data", use_container_width=True)
@@ -273,6 +273,8 @@ def update_prediction_visualization(gt0_gif, gt6_gif, gt12_gif, pred_gif_6, pred
     pred_plus_30.image(pred_gif_6, caption="Prediction +30 minutes", use_container_width=True)
     gt_plus_60.image(gt12_gif, caption="Data +60 minutes", use_container_width=True)
     pred_plus_60.image(pred_gif_12, caption="Prediction +60 minutes", use_container_width=True)
+    colorbar30.image(create_colorbar_fig(bot_adj=0.04))
+    colorbar60.image(create_colorbar_fig(top_adj=0.95, bot_adj=0.11))
 
 
 def submit_prediction_job(sidebar_args):

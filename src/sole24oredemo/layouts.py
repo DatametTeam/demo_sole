@@ -35,7 +35,7 @@ def configure_sidebar():
 
 
 def init_prediction_visualization_layout():
-    col1, col_small_1, col2, col3, col_small_2 = st.columns([3, 0.5, 3, 3, 0.5])
+    col1, col_small_1, col2, col3, col_small_2 = st.columns([3, 0.3, 3, 3, 0.4])
     with col1:
         st.markdown("<h3 style='text-align: center;'>Current Time</h3>", unsafe_allow_html=True)
         gt_current = st.empty()
@@ -46,9 +46,9 @@ def init_prediction_visualization_layout():
         # Row 1: +30 min
         st.markdown(
             """
-            <div style="height: 100px; display: flex; justify-content: center; align-items: center; transform: 
-            rotate(270deg);">
-                +30 min
+            <div style="height: 700px; display: flex; justify-content: center; align-items: center; transform: 
+            rotate(270deg); font-weight: bold; font-size: 1.5em; white-space: nowrap;">
+                +30min
             </div>
             """,
             unsafe_allow_html=True,
@@ -56,16 +56,16 @@ def init_prediction_visualization_layout():
         # Row 2: +60 min
         st.markdown(
             """
-            <div style="height: 100px; display: flex; justify-content: center; align-items: center; transform: 
-            rotate(270deg);">
-                +60 min
+            <div style="height: 600px; display: flex; justify-content: center; align-items: center; transform: 
+            rotate(270deg); font-weight: bold; font-size: 1.5em; white-space: nowrap;">
+                +60min
             </div>
             """,
             unsafe_allow_html=True,
         )
 
     with col2:
-        st.markdown("<h3 style='text-align: center;'>Grountruths</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center;'>Groundtruths</h3>", unsafe_allow_html=True)
         gt_plus_30 = st.empty()
         gt_plus_60 = st.empty()
     with col3:
@@ -74,6 +74,7 @@ def init_prediction_visualization_layout():
         pred_plus_60 = st.empty()
     # Small column 2 (colorbar placeholder)
     with col_small_2:
-        st.markdown("<h4 style='text-align: center;'>Colorbar Placeholder</h4>", unsafe_allow_html=True)
+        colorbar30 = st.empty()
+        colorbar60 = st.empty()
 
-    return gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60
+    return gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60, colorbar30, colorbar60
