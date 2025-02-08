@@ -35,46 +35,60 @@ def configure_sidebar():
 
 
 def init_prediction_visualization_layout():
-    col1, col_small_1, col2, col3, col_small_2 = st.columns([3, 0.3, 3, 3, 0.4])
-    with col1:
+    row1 = st.columns([3, 0.3, 3, 3, 0.4], vertical_alignment='center')
+    row2 = st.columns([3, 0.3, 3, 3, 0.4], vertical_alignment='center')
+    row3 = st.columns([3, 0.3, 3, 3, 0.4], vertical_alignment='center')
+
+    with row1[0]:
         st.markdown("<h3 style='text-align: center;'>Current Time</h3>", unsafe_allow_html=True)
+    with row1[2]:
+        st.markdown("<h3 style='text-align: center;'>Groundtruths</h3>", unsafe_allow_html=True)
+    with row1[3]:
+        st.markdown("<h3 style='text-align: center;'>Predictions</h3>", unsafe_allow_html=True)
+
+    with row2[0]:
         gt_current = st.empty()
+
+    with row3[0]:
         pred_current = st.empty()
 
-    # Small column 1: Vertical text
-    with col_small_1:
-        # Row 1: +30 min
+    with row2[1]:
         st.markdown(
             """
-            <div style="height: 700px; display: flex; justify-content: center; align-items: center; transform: 
-            rotate(270deg); font-weight: bold; font-size: 1.5em; white-space: nowrap;">
-                +30min
+            <div style="display: flex; align-items: center; justify-content: center; height: 100%;">
+                <div style="transform: rotate(-90deg); font-weight: bold; font-size: 1.5em; white-space: nowrap;">
+                    +30min
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        # Row 2: +60 min
+    with row3[1]:
         st.markdown(
             """
-            <div style="height: 600px; display: flex; justify-content: center; align-items: center; transform: 
-            rotate(270deg); font-weight: bold; font-size: 1.5em; white-space: nowrap;">
-                +60min
+            <div style="position: relative; height: 100%; width: 100%;">
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(270deg);
+                font-weight: bold; font-size: 1.5em; white-space: nowrap;">
+                    +60min
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    with col2:
-        st.markdown("<h3 style='text-align: center;'>Groundtruths</h3>", unsafe_allow_html=True)
+    with row2[2]:
         gt_plus_30 = st.empty()
+    with row3[2]:
         gt_plus_60 = st.empty()
-    with col3:
-        st.markdown("<h3 style='text-align: center;'>Predictions</h3>", unsafe_allow_html=True)
+
+    with row2[3]:
         pred_plus_30 = st.empty()
+    with row3[3]:
         pred_plus_60 = st.empty()
-    # Small column 2 (colorbar placeholder)
-    with col_small_2:
+
+    with row2[4]:
         colorbar30 = st.empty()
+    with row3[4]:
         colorbar60 = st.empty()
 
     return gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60, colorbar30, colorbar60

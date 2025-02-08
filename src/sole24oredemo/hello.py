@@ -273,8 +273,8 @@ def update_prediction_visualization(gt0_gif, gt6_gif, gt12_gif, pred_gif_6, pred
     pred_plus_30.image(pred_gif_6, caption="Prediction +30 minutes", use_container_width=True)
     gt_plus_60.image(gt12_gif, caption="Data +60 minutes", use_container_width=True)
     pred_plus_60.image(pred_gif_12, caption="Prediction +60 minutes", use_container_width=True)
-    colorbar30.image(create_colorbar_fig(bot_adj=0.04))
-    colorbar60.image(create_colorbar_fig(top_adj=0.95, bot_adj=0.11))
+    colorbar30.image(create_colorbar_fig(top_adj=0.96, bot_adj=0.12))
+    colorbar60.image(create_colorbar_fig(top_adj=0.96, bot_adj=0.12))
 
 
 def submit_prediction_job(sidebar_args):
@@ -427,58 +427,9 @@ def main_page(sidebar_args) -> None:
                     pred_gifs = load_gif_as_bytesio(pred_paths)
                     display_results(gt_gifs, pred_gifs)
 
-            return
-            error, out_dir = submit_prediction_job(sidebar_args)
-            if not error:
-                with st.status(f':hammer_and_wrench: **Loading results...**', expanded=True) as status:
-
-                    prediction_placeholder = st.empty()
-                    progress_placeholder = st.empty()  # Add this line for progress bar
-
-                    with prediction_placeholder:
-                        status.update(label="🔄 Loading results...", state="running", expanded=True)
-
-                        gt_gif_ok, pred_gif_ok, gt_paths, pred_paths = check_if_gif_present(sidebar_args)
-                        if gt_gif_ok:
-                            gt_gifs = load_gif_as_bytesio(gt_paths)
-                        if pred_gif_ok:
-                            pred_gifs = load_gif_as_bytesio(pred_paths)
-
-                        if not gt_gif_ok or not pred_gif_ok:
-                            gt_array, pred_array = get_prediction_results(out_dir)
-
-                            status.update(label="🔄 Creating dictionaries...", state="running", expanded=True)
-                            gt_dict, pred_dict = create_fig_dict_in_parallel(gt_array, pred_array)
-
-                            if not gt_gif_ok:
-                                status.update(label="🔄 Creating GT GIFs...", state="running", expanded=True)
-                                gt_gifs = create_sliding_window_gifs(gt_dict, progress_placeholder, fps_gif=3,
-                                                                     save_on_disk=True)
-                            if not pred_gif_ok:
-                                status.update(label="🔄 Creating Pred GIFs...", state="running", expanded=True)
-                                pred_gifs = create_sliding_window_gifs_for_predictions(pred_dict, progress_placeholder,
-                                                                                       fps_gif=3, save_on_disk=True)
-
-                        gt0_gif = gt_gifs[0]  # Full sequence
-                        gt_gif_6 = gt_gifs[1]  # Starts from frame 6
-                        gt_gif_12 = gt_gifs[2]  # Starts from frame 12
-                        pred_gif_6 = pred_gifs[0]
-                        pred_gif_12 = pred_gifs[1]
-
-                        # Store results in session state
-                        st.session_state.prediction_result = {
-                            'gt0_gif': gt0_gif,
-                            'gt6_gif': gt_gif_6,
-                            'gt12_gif': gt_gif_12,
-                            'pred6_gif': pred_gif_6,
-                            'pred12_gif': pred_gif_12,
-                        }
-                        st.session_state.tab1_gif = gt0_gif.getvalue()
-
-                        status.update(label=f"Done!", state="complete", expanded=True)
-                        update_prediction_visualization(gt0_gif, gt_gif_6, gt_gif_12, pred_gif_6, pred_gif_12)
             else:
-                st.error(error)
+                compute_prediction_results(sidebar_args)
+            return
     else:
         # If prediction results already exist, reuse them
         gt0_gif = st.session_state.prediction_result['gt0_gif']
