@@ -1,19 +1,16 @@
-import io
-import os
 import streamlit as st
-from PIL import Image
 from pathlib import Path
 import time
 import numpy as np
 from layouts import configure_sidebar, init_prediction_visualization_layout, init_second_tab_layout
 from pbs import is_pbs_available
 
-from sole24oredemo.parallel_code import create_fig_dict_in_parallel
+from sole24oredemo.parallel_code import create_fig_dict_in_parallel, create_sliding_window_gifs, \
+    create_sliding_window_gifs_for_predictions
 from sole24oredemo.utils import check_if_gif_present, load_gif_as_bytesio, create_colorbar_fig, \
     get_closest_5_minute_time, read_groundtruth_and_target_data
-import imageio
-from datetime import datetime, time, timedelta
-from multiprocessing import Manager, Process
+from datetime import time as dt_time
+from datetime import datetime, timedelta
 import folium
 from streamlit_folium import st_folium
 
@@ -23,239 +20,6 @@ if is_pbs_available():
     from pbs import submit_inference, get_job_status
 else:
     from mock import inference_mock as submit_inference, get_job_status
-
-
-def create_single_gif_for_parallel(queue, start_pos, figures_dict, window_size, sorted_keys, process_idx,
-                                   save_on_disk=True, fps_gif=3):
-    """
-    Create a single GIF and send progress updates through a queue.
-    """
-    buf = io.BytesIO()
-    frames = []
-    print(f"{start_pos} / {start_pos + window_size}")
-    window_keys = sorted_keys[start_pos:start_pos + window_size]
-    print(window_keys)
-
-    for i, key in enumerate(window_keys):
-        fig = figures_dict[key]
-        buf_tracked = io.BytesIO()
-        fig.savefig(buf_tracked, format='png', bbox_inches='tight', pad_inches=0)
-        buf_tracked.seek(0)
-        img = Image.open(buf_tracked)
-        frames.append(np.array(img))
-
-        # Send progress update through queue
-        progress = (i + 1) / len(window_keys)
-        queue.put(('progress', process_idx, progress))
-
-    imageio.mimsave(buf, frames, format='GIF', fps=fps_gif, loop=0)
-    buf.seek(0)
-    # Send completed GIF through queue
-    queue.put(('complete', process_idx, buf.getvalue()))
-
-    if save_on_disk:
-        save_path = "/archive/SSD/home/guidim/demo_sole/data/output/gifs/gt"
-        file_name = f"{window_keys[0]}_{window_keys[-1]}"
-        save_path = os.path.join(save_path, file_name + '.gif')
-        imageio.mimsave(save_path, frames, format='GIF', fps=fps_gif, loop=0)
-        print(f"GIF save @ path {save_path}")
-
-
-def create_sliding_window_gifs(figures_dict, progress_placeholder, start_positions=[0, 6, 12], save_on_disk=True,
-                               fps_gif=3):
-    """
-    Create multiple GIFs in parallel with progress tracking.
-    """
-    window_size = len(figures_dict) - 12
-    sorted_keys = sorted(figures_dict.keys())
-
-    # Create progress bars and text containers
-    progress_bars = []
-    progress_texts = []
-
-    with st.container():
-        for i in range(len(start_positions)):
-            progress_bars.append(st.progress(0))
-            progress_texts.append(st.empty())
-
-    # Setup multiprocessing queue and processes
-    queue = Manager().Queue()
-    processes = []
-    for idx, start_pos in enumerate(start_positions):
-        p = Process(
-            target=create_single_gif_for_parallel,
-            args=(queue, start_pos, figures_dict, window_size, sorted_keys, idx, save_on_disk, fps_gif)
-        )
-        processes.append(p)
-
-    # Start all processes
-    for p in processes:
-        p.start()
-
-    # Initialize storage for completed GIFs
-    completed_gifs = [None] * len(start_positions)
-    completed_count = 0
-
-    # Monitor queue for updates
-    while completed_count < len(start_positions):
-        try:
-            msg_type, idx, data = queue.get(timeout=1)
-
-            if msg_type == 'progress':
-                total_steps = window_size
-                current_step = int(data * total_steps)
-                progress_bars[idx].progress(data)
-                progress_texts[idx].text(f"GIF {idx + 1}: {current_step}/{total_steps} complete")
-
-            elif msg_type == 'complete':
-                completed_gifs[idx] = io.BytesIO(data)
-                completed_count += 1
-                progress_texts[idx].text(f"GIF {idx + 1}: Complete!")
-
-        except:
-            # Check if all processes are still alive
-            if not any(p.is_alive() for p in processes):
-                break
-
-    # Clean up processes
-    for p in processes:
-        p.join()
-
-    # Clear progress indicators
-    for bar in progress_bars:
-        bar.empty()
-    for text in progress_texts:
-        text.empty()
-
-    return completed_gifs
-
-
-def create_sliding_window_gifs_for_predictions(prediction_dict, progress_placeholder, save_on_disk=True, fps_gif=3):
-    """
-    Create GIFs for the predictions dictionary. Each GIF corresponds to:
-    - +30 mins: Figures from the "+30mins" key in the nested dictionary.
-    - +60 mins: Figures from the "+60mins" key in the nested dictionary.
-
-    Args:
-        prediction_dict: Dictionary where each key is a timestamp, and the value is a nested dictionary
-                         with "+30mins" and "+60mins" keys containing figures.
-        progress_placeholder: Streamlit placeholder for progress updates.
-
-    Returns:
-        Tuple of BytesIO buffers containing the two GIFs (+30 mins, +60 mins).
-    """
-
-    def create_single_gif(queue, figures, gif_type, process_idx, start_key, end_key, fps_gif=3, save_on_disk=True):
-        buf = io.BytesIO()
-        frames = []
-
-        for idx, fig in enumerate(figures):
-            try:
-                buf_tracked = io.BytesIO()
-                fig.savefig(buf_tracked, format='png', bbox_inches='tight', pad_inches=0)
-                buf_tracked.seek(0)
-                img = Image.open(buf_tracked)
-                frames.append(np.array(img))
-
-                # Update progress
-                progress = (idx + 1) / len(figures)
-                queue.put(('progress', process_idx, progress))
-
-            except Exception as e:
-                print(f"Error processing figure for {gif_type}, index {idx}: {e}")
-                continue
-
-        if not frames:
-            raise ValueError(f"No frames generated for {gif_type}.")
-
-        # Create the GIF
-        imageio.mimsave(buf, frames, format='GIF', fps=fps_gif, loop=0)
-        buf.seek(0)
-        queue.put(('complete', process_idx, buf.getvalue()))
-
-        if save_on_disk:
-            save_path = "/archive/SSD/home/guidim/demo_sole/data/output/gifs/pred"
-            file_name = f"{start_key}_{end_key}_{gif_type}"
-            save_path = os.path.join(save_path, file_name + '.gif')
-            imageio.mimsave(save_path, frames, format='GIF', fps=fps_gif, loop=0)
-            print(f"GIF save @ path {save_path}")
-
-    sorted_keys = sorted(prediction_dict.keys())
-
-    # Select all except the last 12 keys
-    keys_except_last_12 = sorted_keys[:-12]
-
-    # Filter the dictionary
-    prediction_dict = {key: prediction_dict[key] for key in keys_except_last_12}
-
-    # Extract figures for +30 mins and +60 mins
-    figures_30 = [nested_dict["+30min"] for nested_dict in prediction_dict.values() if "+30min" in nested_dict]
-    figures_60 = [nested_dict["+60min"] for nested_dict in prediction_dict.values() if "+60min" in nested_dict]
-    start_key = keys_except_last_12[0]
-    end_key = keys_except_last_12[-1]
-
-    if not figures_30 or not figures_60:
-        raise ValueError("Insufficient figures for +30 min or +60 min.")
-
-    # Create progress bars and placeholders
-    progress_bars = []
-    progress_texts = []
-
-    with st.container():
-        for _ in range(2):
-            progress_bars.append(st.progress(0))
-            progress_texts.append(st.empty())
-
-    # Setup multiprocessing queue and processes
-    queue = Manager().Queue()
-    processes = []
-
-    for idx, (figures, gif_type) in enumerate([(figures_30, "+30 mins"), (figures_60, "+60 mins")]):
-        p = Process(target=create_single_gif,
-                    args=(queue, figures, gif_type, idx, start_key, end_key, fps_gif, save_on_disk))
-        processes.append(p)
-
-    # Start all processes
-    for p in processes:
-        p.start()
-
-    # Initialize storage for completed GIFs
-    completed_gifs = [None] * len(processes)
-    completed_count = 0
-
-    # Monitor queue for updates
-    while completed_count < len(processes):
-        try:
-            msg_type, idx, data = queue.get(timeout=1)
-
-            if msg_type == 'progress':
-                progress_bars[idx].progress(data)
-                total_steps = len(keys_except_last_12)
-                current_step = int(data * total_steps)
-                progress_bars[idx].progress(data)
-                progress_texts[idx].text(f"GIF {idx + 1}: {current_step}/{total_steps} complete")
-
-            elif msg_type == 'complete':
-                completed_gifs[idx] = io.BytesIO(data)
-                completed_count += 1
-                progress_texts[idx].text(f"GIF {idx + 1}: Complete!")
-
-        except:
-            # Check if all processes are still alive
-            if not any(p.is_alive() for p in processes):
-                break
-
-    # Clean up processes
-    for p in processes:
-        p.join()
-
-    # Clear progress indicators
-    for bar in progress_bars:
-        bar.empty()
-    for text in progress_texts:
-        text.empty()
-
-    return completed_gifs
 
 
 def update_prediction_visualization(gt0_gif, gt6_gif, gt12_gif, pred_gif_6, pred_gif_12):
@@ -301,20 +65,24 @@ def submit_prediction_job(sidebar_args):
     return error, out_dir
 
 
-def get_prediction_results(out_dir):
+def get_prediction_results(out_dir, sidebar_args):
     # TODO: da fixare
-    out_dir = Path("/archive/SSD/home/guidim/demo_sole/data/output/ConvLSTM/20250205/20250205/generations")
+    model_name = sidebar_args['model_name']
+    pred_out_dir = Path(f"/davinci-1/work/protezionecivile/sole24/pred_teo/Test")
+    model_out_dir = Path(f"/davinci-1/work/protezionecivile/sole24/pred_teo/{model_name}")
 
-    gt_array = np.load(out_dir / "data.npy", mmap_mode='r')[0:24]
+    gt_array = np.load(pred_out_dir / "predictions.npy", mmap_mode='r')[12:36]
     gt_array = np.array(gt_array)
     gt_array[gt_array < 0] = 0
-    gt_array[gt_array > 200] = 200
+    # gt_array[gt_array > 200] = 200
     # gt_array = (gt_array - np.min(gt_array)) / (np.max(gt_array) - np.min(gt_array))
 
-    pred_array = np.load(out_dir / "data.npy", mmap_mode='r')[0:24]
+    pred_array = np.load(model_out_dir / "predictions.npy", mmap_mode='r')[0:24]
+    if model_name == 'Test':  # TODO: sistemare
+        pred_array = np.load(model_out_dir / "predictions.npy", mmap_mode='r')[12:36]
     pred_array = np.array(pred_array)
     pred_array[pred_array < 0] = 0
-    pred_array[pred_array > 200] = 200
+    # pred_array[pred_array > 200] = 200
     # pred_array = (pred_array - np.min(pred_array)) / (np.max(pred_array) - np.min(pred_array))
     print("*** LOADED DATA ***")
 
@@ -327,7 +95,6 @@ def compute_prediction_results(sidebar_args):
         with st.status(f':hammer_and_wrench: **Loading results...**', expanded=True) as status:
 
             prediction_placeholder = st.empty()
-            progress_placeholder = st.empty()  # Add this line for progress bar
 
             with prediction_placeholder:
                 status.update(label="🔄 Loading results...", state="running", expanded=True)
@@ -336,38 +103,21 @@ def compute_prediction_results(sidebar_args):
                 if gt_gif_ok:
                     gt_gifs = load_gif_as_bytesio(gt_paths)
 
-                gt_array, pred_array = get_prediction_results(out_dir)
+                gt_array, pred_array = get_prediction_results(out_dir, sidebar_args)
 
                 status.update(label="🔄 Creating dictionaries...", state="running", expanded=True)
-                gt_dict, pred_dict = create_fig_dict_in_parallel(gt_array, pred_array)
+                gt_dict, pred_dict = create_fig_dict_in_parallel(gt_array, pred_array, sidebar_args)
 
                 if not gt_gif_ok:
                     status.update(label="🔄 Creating GT GIFs...", state="running", expanded=True)
-                    gt_gifs = create_sliding_window_gifs(gt_dict, progress_placeholder, fps_gif=3,
+                    gt_gifs = create_sliding_window_gifs(gt_dict, sidebar_args, fps_gif=3,
                                                          save_on_disk=True)
 
                 status.update(label="🔄 Creating Pred GIFs...", state="running", expanded=True)
-                pred_gifs = create_sliding_window_gifs_for_predictions(pred_dict, progress_placeholder,
+                pred_gifs = create_sliding_window_gifs_for_predictions(pred_dict, sidebar_args,
                                                                        fps_gif=3, save_on_disk=True)
 
-                gt0_gif = gt_gifs[0]  # Full sequence
-                gt_gif_6 = gt_gifs[1]  # Starts from frame 6
-                gt_gif_12 = gt_gifs[2]  # Starts from frame 12
-                pred_gif_6 = pred_gifs[0]
-                pred_gif_12 = pred_gifs[1]
-
-                # Store results in session state
-                st.session_state.prediction_result = {
-                    'gt0_gif': gt0_gif,
-                    'gt6_gif': gt_gif_6,
-                    'gt12_gif': gt_gif_12,
-                    'pred6_gif': pred_gif_6,
-                    'pred12_gif': pred_gif_12,
-                }
-                st.session_state.tab1_gif = gt0_gif.getvalue()
-
                 status.update(label=f"Done!", state="complete", expanded=True)
-                update_prediction_visualization(gt0_gif, gt_gif_6, gt_gif_12, pred_gif_6, pred_gif_12)
                 display_results(gt_gifs, pred_gifs)
     else:
         st.error(error)
@@ -442,16 +192,18 @@ def show_prediction_page():
     selected_date = st.date_input(
         "Select Date", min_value=datetime(2020, 1, 1).date(), max_value=datetime.today().date(), format="DD/MM/YYYY",
         value=datetime(2025, 2, 6).date())
-    selected_time = st.time_input("Select Time", value=time(15, 00))  # get_closest_5_minute_time(), s
+    selected_time = st.time_input("Select Time", value=dt_time(15, 00))  # get_closest_5_minute_time(), s
+    selected_model = st.selectbox("Select model", ("ConvLSTM", "ED_ConvLSTM", "DynamicUnet", "Test"))
 
     if st.button("Submit"):
         # Combine selected date and time
         selected_datetime = datetime.combine(selected_date, selected_time)
-        selected_key = selected_datetime.strftime("%d%m%Y_%H%M")
+        prediction_start_datetime = selected_datetime - timedelta(hours=1)
+        selected_key = prediction_start_datetime.strftime("%d%m%Y_%H%M")
 
-        groundtruth_dict, target_dict = read_groundtruth_and_target_data(selected_key)
+        groundtruth_dict, target_dict, pred_dict = read_groundtruth_and_target_data(selected_key, selected_model)
 
-        init_second_tab_layout(groundtruth_dict, target_dict, target_dict)
+        init_second_tab_layout(groundtruth_dict, target_dict, pred_dict)
 
 
 def show_home_page():
@@ -466,14 +218,14 @@ def show_home_page():
 
 
 def show_real_time_prediction():
-    map = folium.Map(location=[45.0, 7.0], zoom_start=10)  # Specify a location and zoom level
 
-    # Add a marker for demonstration purposes
-    folium.Marker(
-        location=[45.0, 7.0],
-        popup="Demo Location",
-        icon=folium.Icon(color="blue", icon="info-sign"),
-    ).add_to(map)
+    img1 = np.load()
+
+
+    map = folium.Map(
+        location=[42.5, 12.5],
+        zoom_start=5,
+    )  # Add a marker for demonstration purposes
 
     # Display the map in Streamlit
     st_map = st_folium(map, width=700, height=500)
@@ -492,7 +244,7 @@ def main():
 
     with tab2:
         show_prediction_page()
-    
+
     with tab3:
         show_real_time_prediction()
 

@@ -406,7 +406,8 @@ def get_italian_region_shapefile() -> Path:
 
 
 def check_if_gif_present(sidebar_args):
-    gif_dir = "/archive/SSD/home/guidim/demo_sole/data/output/gifs"
+    model = sidebar_args['model_name']
+    gif_dir = f"/archive/SSD/home/guidim/demo_sole/data/output/gifs/{model}"
     start_date = sidebar_args['start_date']
     start_time = sidebar_args['start_time']
 
@@ -495,11 +496,18 @@ def get_closest_5_minute_time():
     return now.replace(minute=minutes, second=0, microsecond=0).time()
 
 
-def read_groundtruth_and_target_data(selected_key):
+def read_groundtruth_and_target_data(selected_key, selected_model):
     # Define output directory and load arrays
-    out_dir = Path("/archive/SSD/home/guidim/demo_sole/data/output/ConvLSTM/20250205/20250205/generations")
-    gt_array = np.load(out_dir / "data.npy", mmap_mode='r')[0:12,0]
-    pred_array = np.load(out_dir / "data.npy", mmap_mode='r')[12:24,0]
+    # TODO: da sistemare
+    out_dir = Path(f"/davinci-1/work/protezionecivile/sole24/pred_teo/{selected_model}")
+    gt_array = np.load(Path(f"/davinci-1/work/protezionecivile/sole24/pred_teo/Test") / "predictions.npy",
+                       mmap_mode='r')[0:12, 0]
+    target_array = np.load(
+        Path(f"/davinci-1/work/protezionecivile/sole24/pred_teo/Test") / "predictions.npy",
+        mmap_mode='r')[12:24, 0]
+    pred_array = np.load(out_dir / "predictions.npy", mmap_mode='r')[12]
+    if selected_model == 'Test':
+        pred_array = np.load(out_dir / "predictions.npy", mmap_mode='r')[12:24, 0]
 
     # Clean and normalize arrays
     gt_array = np.clip(gt_array, 0, 200)
@@ -511,20 +519,24 @@ def read_groundtruth_and_target_data(selected_key):
     # Create dictionaries for ground truth and predictions
     gt_dict = {}
     pred_dict = {}
+    target_dict = {}
 
     # Fill ground truth dictionary
     for i in range(len(gt_array)):
         timestamp = (selected_time + timedelta(minutes=5 * i)).strftime("%d%m%Y_%H%M")
         gt_dict[timestamp] = gt_array[i]
 
+    for i in range(len(target_array)):
+        timestamp = (selected_time + timedelta(minutes=5 * i)).strftime("%d%m%Y_%H%M")
+        target_dict[timestamp] = target_array[i]
+
     # Adjust start time for predictions (60 minutes later)
-    pred_start_time = selected_time + timedelta(minutes=5 * 12)
+    # pred_start_time = selected_time + timedelta(minutes=5 * 12)
     for i in range(len(pred_array)):
-        timestamp = (pred_start_time + timedelta(minutes=5 * i)).strftime("%d%m%Y_%H%M")
+        timestamp = (selected_time + timedelta(minutes=5 * i)).strftime("%d%m%Y_%H%M")
         pred_dict[timestamp] = pred_array[i]
 
-    return gt_dict, pred_dict
-
+    return gt_dict, target_dict, pred_dict
 
 
 lat_0 = 42.0
