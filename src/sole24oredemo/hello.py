@@ -1,3 +1,4 @@
+import pyproj
 import streamlit as st
 from pathlib import Path
 import time
@@ -8,7 +9,7 @@ from pbs import is_pbs_available
 from sole24oredemo.parallel_code import create_fig_dict_in_parallel, create_sliding_window_gifs, \
     create_sliding_window_gifs_for_predictions
 from sole24oredemo.utils import check_if_gif_present, load_gif_as_bytesio, create_colorbar_fig, \
-    get_closest_5_minute_time, read_groundtruth_and_target_data
+    get_closest_5_minute_time, read_groundtruth_and_target_data, lincol_2_yx, yx_2_latlon, cmap, norm
 from datetime import time as dt_time
 from datetime import datetime, timedelta
 import folium
@@ -218,17 +219,78 @@ def show_home_page():
 
 
 def show_real_time_prediction():
+    # Initial state management
+    if 'selected_model' not in st.session_state:
+        st.session_state.selected_model = None
+    if 'selected_time' not in st.session_state:
+        st.session_state.selected_time = None
 
-    img1 = np.load()
+    model_options = ["ConvLSTM", "ED_ConvLSTM", "DynamicUnet"]
+    time_options = ["+5min", "+10min", "+15min", "+20min", "+25min",
+                    "+30min", "+35min", "+40min", "+45min", "+50min",
+                    "+55min", "+60min"]
 
+    columns = st.columns([0.5, 0.5])
+    with columns[0]:
+        internal_columns = st.columns([0.3, 0.1, 0.3])
+        with internal_columns[0]:
+            # Select model, bound to session state
+            st.selectbox(
+                "Select a model",
+                options=model_options,
+                key="selected_model"
+            )
 
-    map = folium.Map(
-        location=[42.5, 12.5],
-        zoom_start=5,
-    )  # Add a marker for demonstration purposes
+        with internal_columns[2]:
+            # Select time, bound to session state
+            st.selectbox(
+                "Select a prediction time",
+                options=time_options,
+                key="selected_time"
+            )
 
-    # Display the map in Streamlit
-    st_map = st_folium(map, width=700, height=500)
+    map = folium.Map(location=[42.5, 12.5],
+                     zoom_start=5,
+                     # tiles='Esri.WorldGrayCanvas'
+                     )
+
+    if st.session_state.selected_model and st.session_state.selected_time:
+        # img1 = np.load(
+        #     Path(
+        #         f"/davinci-1/work/protezionecivile/sole24/pred_teo/{st.session_state.selected_model}") /
+        #     "predictions.npy", mmap_mode='r')[0, time_options.index(st.session_state.selected_time)]
+        img1 = np.load(
+            Path(
+                f"/davinci-1/work/protezionecivile/sole24/pred_teo/Test") /
+            "predictions.npy", mmap_mode='r')[0, 0]
+        img1 = np.array(img1)
+        img1[img1 < 0] = 0
+        img1 = img1.astype(float)
+
+        destlines = 1400
+        destcols = 1200
+        par = [600., 1000., 650., -1000.]
+        lat_0 = 42.0
+        lon_0 = 12.5
+        map_ = pyproj.Proj({"proj": 'tmerc', "lat_0": lat_0, "lon_0": lon_0})
+        y = np.arange(destlines).reshape(-1, 1) * np.ones((1, destcols))
+        x = np.ones((destlines, 1)) * np.arange(destcols).reshape(1, -1).astype(int)
+        y, x = lincol_2_yx(lin=y, col=x, params=par, set_center=True)
+        lat, lon = yx_2_latlon(y, x, map_)
+
+        lat_min, lat_max = lat.min(), lat.max()
+        lon_min, lon_max = lon.min(), lon.max()
+
+        img1_norm = norm(img1)
+        rgba_img = cmap(img1_norm)  # Map to RGBA using colormap
+
+        folium.raster_layers.ImageOverlay(
+            image=rgba_img,
+            bounds=[[lat_min, lon_min], [lat_max, lon_max]],
+            mercator_project=True,
+        ).add_to(map)
+
+    st_map = st_folium(map, width=700, height=600)
 
 
 def main():
