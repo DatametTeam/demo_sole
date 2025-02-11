@@ -4,7 +4,7 @@ import streamlit as st
 from datetime import datetime, time, timedelta
 
 from PIL import Image
-from sole24oredemo.utils import compute_figure_gpd
+from sole24oredemo.utils import compute_figure_gpd, create_colorbar_fig
 
 
 def configure_sidebar():
@@ -118,7 +118,7 @@ def precompute_images(frame_dict):
 
 def init_second_tab_layout(groundtruth_images, target_frames, pred_frames):
     # Define the layout with 5 columns (1 for the label and 4 for images)
-    groundtruth_rows = st.columns([0.5] + [1] * 4, vertical_alignment='center')
+    groundtruth_rows = st.columns([0.2] + [1] * 4 + [0.2], vertical_alignment='center')
 
     # First column spanning all 3 rows (label column)
     with groundtruth_rows[0]:
@@ -133,6 +133,8 @@ def init_second_tab_layout(groundtruth_images, target_frames, pred_frames):
             """,
             unsafe_allow_html=True,
         )
+    with groundtruth_rows[-1]:
+        st.image(create_colorbar_fig())
 
     # Loop through the 4 columns for the images
     for row_idx in range(3):  # Loop through rows 1 to 3
@@ -200,5 +202,8 @@ def init_second_tab_layout(groundtruth_images, target_frames, pred_frames):
                     buf.seek(0)
                     image = Image.open(buf)
                     st.image(image, use_container_width=True)
+
+        with target_pred_rows[row_idx][-2]:
+            st.image(create_colorbar_fig(top_adj=0.85, bot_adj=0.07))
 
     return
