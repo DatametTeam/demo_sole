@@ -16,7 +16,7 @@ from PIL import Image
 
 
 def create_fig_dict_in_parallel(gt_data, pred_data, sidebar_args, save_on_disk=False):
-    out_dir = Path("/archive/SSD/home/guidim/demo_sole/data/output/ConvLSTM/20250205/20250205/gen_images/gt")
+    out_dir = Path("/davinci-1/home/guidim/demo_sole/data/output/ConvLSTM/20250205/20250205/gen_images/gt")
 
     start_date = sidebar_args['start_date']
     start_time = sidebar_args['start_time']
@@ -140,7 +140,7 @@ def create_single_gif_for_parallel(queue, start_pos, figures_dict, window_size, 
     queue.put(('complete', process_idx, buf.getvalue()))
 
     if save_on_disk:
-        save_path = f"/archive/SSD/home/guidim/demo_sole/data/output/gifs/{sidebar_args['model_name']}/gt"
+        save_path = f"/davinci-1/home/guidim/demo_sole/data/output/gifs/{sidebar_args['model_name']}/gt"
         os.makedirs(save_path, exist_ok=True)
         file_name = f"{window_keys[0]}_{window_keys[-1]}"
         save_path = os.path.join(save_path, file_name + '.gif')
@@ -262,7 +262,7 @@ def create_sliding_window_gifs_for_predictions(prediction_dict, sidebar_args, sa
         queue.put(('complete', process_idx, buf.getvalue()))
 
         if save_on_disk:
-            save_path = f"/archive/SSD/home/guidim/demo_sole/data/output/gifs/{sidebar_args['model_name']}/pred"
+            save_path = f"/davinci-1/home/guidim/demo_sole/data/output/gifs/{sidebar_args['model_name']}/pred"
             os.makedirs(save_path, exist_ok=True)
             file_name = f"{start_key}_{end_key}_{gif_type}"
             save_path = os.path.join(save_path, file_name + '.gif')

@@ -2,6 +2,7 @@ import io
 import os
 from pathlib import Path
 
+import h5py
 import pyproj
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -407,7 +408,7 @@ def get_italian_region_shapefile() -> Path:
 
 def check_if_gif_present(sidebar_args):
     model = sidebar_args['model_name']
-    gif_dir = f"/archive/SSD/home/guidim/demo_sole/data/output/gifs/{model}"
+    gif_dir = f"/davinci-1/home/guidim/demo_sole/data/output/gifs/{model}"
     start_date = sidebar_args['start_date']
     start_time = sidebar_args['start_time']
 
@@ -509,6 +510,11 @@ def read_groundtruth_and_target_data(selected_key, selected_model):
     if selected_model == 'Test':
         pred_array = np.load(out_dir / "predictions.npy", mmap_mode='r')[12:24, 0]
 
+    with h5py.File("src/mask/radar_mask.hdf", "r") as f:
+        radar_mask = f["mask"][()]
+
+    pred_array = np.where(radar_mask == 1, pred_array, 0)
+
     # Clean and normalize arrays
     gt_array = np.clip(gt_array, 0, 200)
     pred_array = np.clip(pred_array, 0, 200)
@@ -555,7 +561,7 @@ ur_lat = 47
 ll_lon = 6.5
 ur_lon = 20
 
-italy_shape = gpd.read_file("/archive/SSD/home/guidim/demo_sole/src/shapefiles/italian_regions/gadm41_ITA_1.shp")
+italy_shape = gpd.read_file("/davinci-1/home/guidim/demo_sole/src/shapefiles/italian_regions/gadm41_ITA_1.shp")
 # Define the custom Transverse Mercator projection
 custom_crs = {
     "proj": "tmerc",  # Transverse Mercator projection

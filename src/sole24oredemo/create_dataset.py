@@ -48,5 +48,5 @@ combined_sequences = read_hdf_files_sequences(root_folder)
 
 if combined_sequences is not None:
     print("Combined sequences shape:", combined_sequences.shape)
-    np.save("/archive/SSD/home/guidim/demo_sole/data/output/ConvLSTM/20250205/20250205/generations/data.npy",
+    np.save("/davinci-1/home/guidim/demo_sole/data/output/ConvLSTM/20250205/20250205/generations/data.npy",
             combined_sequences)

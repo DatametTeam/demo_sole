@@ -106,13 +106,24 @@ def precompute_images(frame_dict):
     Precomputes images from frame data and stores them in a list.
     """
     precomputed_images = []
-    for timestamp, frame in frame_dict.items():
+    total_frames = len(frame_dict)
+
+    # Initialize a progress bar
+    progress = st.progress(0)
+    progress_text = st.empty()
+
+    for idx, (timestamp, frame) in enumerate(frame_dict.items()):
         if frame is not None:
             fig = compute_figure_gpd(frame, timestamp)
             buf = io.BytesIO()
             fig.savefig(buf, format="png", bbox_inches="tight")
             buf.seek(0)
             precomputed_images.append((timestamp, Image.open(buf)))
+        progress.progress((idx + 1) / total_frames)
+        progress_text.text(f"Processing image {idx + 1}/{total_frames}")
+
+    progress.empty()
+
     return precomputed_images
 
 

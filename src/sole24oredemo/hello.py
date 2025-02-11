@@ -1,3 +1,4 @@
+import h5py
 import pyproj
 import streamlit as st
 from pathlib import Path
@@ -74,19 +75,28 @@ def get_prediction_results(out_dir, sidebar_args):
     pred_out_dir = Path(f"/davinci-1/work/protezionecivile/sole24/pred_teo/Test")
     model_out_dir = Path(f"/davinci-1/work/protezionecivile/sole24/pred_teo/{model_name}")
 
+    print("Loading GT data")
     gt_array = np.load(pred_out_dir / "predictions.npy", mmap_mode='r')[12:36]
+    print("GT data loaded")
     gt_array = np.array(gt_array)
     gt_array[gt_array < 0] = 0
     # gt_array[gt_array > 200] = 200
     # gt_array = (gt_array - np.min(gt_array)) / (np.max(gt_array) - np.min(gt_array))
 
+    print("Loading pred data")
     pred_array = np.load(model_out_dir / "predictions.npy", mmap_mode='r')[0:24]
     if model_name == 'Test':  # TODO: sistemare
         pred_array = np.load(model_out_dir / "predictions.npy", mmap_mode='r')[12:36]
+    print("Loaded pred data")
     pred_array = np.array(pred_array)
     pred_array[pred_array < 0] = 0
     # pred_array[pred_array > 200] = 200
     # pred_array = (pred_array - np.min(pred_array)) / (np.max(pred_array) - np.min(pred_array))
+    with h5py.File("src/mask/radar_mask.hdf", "r") as f:
+        radar_mask = f["mask"][()]
+
+    pred_array = np.where(radar_mask == 1, pred_array, 0)
+
     print("*** LOADED DATA ***")
 
     return gt_array, pred_array
@@ -188,9 +198,6 @@ def main_page(sidebar_args) -> None:
         update_prediction_visualization(gt0_gif, gt_gif_6, gt_gif_12, pred_gif_6, pred_gif_12)
 
 
-
-
-
 def show_prediction_page():
     st.title("Select Date and Time for Prediction")
 
@@ -206,6 +213,11 @@ def show_prediction_page():
         selected_datetime = datetime.combine(selected_date, selected_time)
         prediction_start_datetime = selected_datetime - timedelta(hours=1)
         selected_key = prediction_start_datetime.strftime("%d%m%Y_%H%M")
+
+        args = {'start_date': selected_datetime, 'start_time': prediction_start_datetime, 'model_name': selected_model,
+                'submitted': True}
+
+        submit_prediction_job(args)
 
         # Check if groundtruths are already in session state
         if selected_key not in st.session_state:
@@ -274,6 +286,12 @@ def show_real_time_prediction():
                 key="selected_time",
             )
 
+        # TODO: da fixare
+        st.markdown("<div style='text-align: center; font-size: 18px;'>"
+                    f"<b>Current Date: {datetime.now().strftime('%d-%m-%Y %H:%M')}</b>"
+                    "</div>",
+                    unsafe_allow_html=True)
+
     map = folium.Map(location=[42.5, 12.5],
                      zoom_start=5,
                      control_scale=False,  # Disable control scale
@@ -303,8 +321,8 @@ def show_real_time_prediction():
         #     "predictions.npy", mmap_mode='r')[0, 0]
         img1 = np.array(img1)
 
-        sourceNode = dpg.tree.createTree("/archive/SSD/home/guidim/demo_sole/data/output/nodes/sourceNode")
-        destNode = dpg.tree.createTree("/archive/SSD/home/guidim/demo_sole/data/output/nodes/destNode")
+        sourceNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/sourceNode")
+        destNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/destNode")
         img1 = dpg.warp.warp_map(sourceNode, destNode=destNode, source_data=img1)
         img1 = np.nan_to_num(img1, nan=0)
 
@@ -323,11 +341,23 @@ def show_real_time_prediction():
             # opacity=0.5
         ).add_to(map)
 
-        colormap = cm.LinearColormap(colors=[cmap(i) for i in np.linspace(0, 1, 256)]).to_step(10)
+        data_min = 0  # Minimum value in your data
+        data_max = 100  # Maximum value in your data
+
+        data_values = [0, 1, 2, 5, 10, 20, 30, 50, 75, 100]
+        normalized_values = norm(data_values)
+
+        colormap = cm.LinearColormap(
+            colors=[cmap(n) for n in normalized_values],  # Generate 10 colors
+            index=data_values,  # Map to actual data values
+            vmin=data_min,
+            vmax=data_max
+        )
+
         colormap.caption = "Prediction Intensity (mm/h)"
         map.add_child(colormap)
-        folium.LayerControl().add_to(map)
 
+    folium.LayerControl().add_to(map)
     st_map = st_folium(map, width=700, height=600)
 
 
