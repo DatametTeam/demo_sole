@@ -73,7 +73,8 @@ def init_prediction_visualization_layout():
             st.markdown(
                 """
                 <div style="position: relative; height: 100%; width: 100%;">
-                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(270deg);
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(
+                    270deg);
                     font-weight: bold; font-size: 1.5em; white-space: nowrap;">
                         +60min
                     </div>
@@ -100,7 +101,22 @@ def init_prediction_visualization_layout():
     return gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60, colorbar30, colorbar60
 
 
-def init_second_tab_layout(groundtruth_frames, target_frames, pred_frames):
+def precompute_images(frame_dict):
+    """
+    Precomputes images from frame data and stores them in a list.
+    """
+    precomputed_images = []
+    for timestamp, frame in frame_dict.items():
+        if frame is not None:
+            fig = compute_figure_gpd(frame, timestamp)
+            buf = io.BytesIO()
+            fig.savefig(buf, format="png", bbox_inches="tight")
+            buf.seek(0)
+            precomputed_images.append((timestamp, Image.open(buf)))
+    return precomputed_images
+
+
+def init_second_tab_layout(groundtruth_images, target_frames, pred_frames):
     # Define the layout with 5 columns (1 for the label and 4 for images)
     groundtruth_rows = st.columns([0.5] + [1] * 4, vertical_alignment='center')
 
@@ -124,16 +140,9 @@ def init_second_tab_layout(groundtruth_frames, target_frames, pred_frames):
         for col_idx in range(1, 5):  # Columns 1 to 4 (skip index 0)
             with groundtruth_rows[col_idx]:
                 timestamp_idx = col_idx - 1 + row_offset
-                if timestamp_idx < len(groundtruth_frames):
-                    timestamp = list(groundtruth_frames.keys())[timestamp_idx]
-                    frame = groundtruth_frames.get(timestamp, None)
-                    if frame is not None:
-                        fig = compute_figure_gpd(frame, timestamp)
-                        buf = io.BytesIO()
-                        fig.savefig(buf, format="png", bbox_inches="tight")
-                        buf.seek(0)
-                        image = Image.open(buf)
-                        st.image(image, use_container_width=True)
+                if timestamp_idx < len(groundtruth_images):
+                    timestamp, image = groundtruth_images[timestamp_idx]
+                    st.image(image, caption=timestamp, use_container_width=True)
 
     # Additional layout for TARGET and PREDICTION columns
     target_pred_rows = []
@@ -193,4 +202,3 @@ def init_second_tab_layout(groundtruth_frames, target_frames, pred_frames):
                     st.image(image, use_container_width=True)
 
     return
-

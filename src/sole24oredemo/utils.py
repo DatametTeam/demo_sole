@@ -527,13 +527,13 @@ def read_groundtruth_and_target_data(selected_key, selected_model):
         gt_dict[timestamp] = gt_array[i]
 
     for i in range(len(target_array)):
-        timestamp = (selected_time + timedelta(minutes=5 * i)).strftime("%d%m%Y_%H%M")
+        timestamp = (selected_time + timedelta(minutes=5 * (12 + i))).strftime("%d%m%Y_%H%M")
         target_dict[timestamp] = target_array[i]
 
     # Adjust start time for predictions (60 minutes later)
     # pred_start_time = selected_time + timedelta(minutes=5 * 12)
     for i in range(len(pred_array)):
-        timestamp = (selected_time + timedelta(minutes=5 * i)).strftime("%d%m%Y_%H%M")
+        timestamp = (selected_time + timedelta(minutes=5 * (12 + i))).strftime("%d%m%Y_%H%M")
         pred_dict[timestamp] = pred_array[i]
 
     return gt_dict, target_dict, pred_dict

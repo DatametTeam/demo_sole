@@ -3,7 +3,7 @@ import streamlit as st
 from pathlib import Path
 import time
 import numpy as np
-from layouts import configure_sidebar, init_prediction_visualization_layout, init_second_tab_layout
+from layouts import configure_sidebar, init_prediction_visualization_layout, init_second_tab_layout, precompute_images
 from pbs import is_pbs_available
 
 from sole24oredemo.parallel_code import create_fig_dict_in_parallel, create_sliding_window_gifs, \
@@ -188,6 +188,9 @@ def main_page(sidebar_args) -> None:
         update_prediction_visualization(gt0_gif, gt_gif_6, gt_gif_12, pred_gif_6, pred_gif_12)
 
 
+
+
+
 def show_prediction_page():
     st.title("Select Date and Time for Prediction")
 
@@ -204,9 +207,29 @@ def show_prediction_page():
         prediction_start_datetime = selected_datetime - timedelta(hours=1)
         selected_key = prediction_start_datetime.strftime("%d%m%Y_%H%M")
 
-        groundtruth_dict, target_dict, pred_dict = read_groundtruth_and_target_data(selected_key, selected_model)
+        # Check if groundtruths are already in session state
+        if selected_key not in st.session_state:
+            groundtruth_dict, target_dict, pred_dict = read_groundtruth_and_target_data(selected_key, selected_model)
 
-        init_second_tab_layout(groundtruth_dict, target_dict, pred_dict)
+            # Precompute and cache images for groundtruths
+            st.session_state[selected_key] = {
+                "groundtruths": precompute_images(groundtruth_dict),
+                "target_dict": target_dict,
+                "pred_dict": pred_dict,
+            }
+        else:
+            # If groundtruths exist, just update the target and prediction dictionaries for the new model
+            _, target_dict, pred_dict = read_groundtruth_and_target_data(selected_key, selected_model)
+            st.session_state[selected_key]["target_dict"] = target_dict
+            st.session_state[selected_key]["pred_dict"] = pred_dict
+
+        # Use cached groundtruths, targets, and predictions
+        groundtruth_images = st.session_state[selected_key]["groundtruths"]
+        target_dict = st.session_state[selected_key]["target_dict"]
+        pred_dict = st.session_state[selected_key]["pred_dict"]
+
+        # Initialize the second tab layout with precomputed images
+        init_second_tab_layout(groundtruth_images, target_dict, pred_dict)
 
 
 def show_home_page():
