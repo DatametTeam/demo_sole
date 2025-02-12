@@ -2,7 +2,6 @@ models:
   - ConvLSTM
   - ED_ConvLSTM
   - DynamicUnet
-  - ConvLSTMHeist
   - pystep
   - Test
 

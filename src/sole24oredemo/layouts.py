@@ -236,6 +236,12 @@ def show_metrics_page(config):
         step=timedelta(minutes=5)  # 5-minute intervals
     )
 
+    # Initialize session state for selected models and plots
+    if "selected_models" not in st.session_state:
+        st.session_state["selected_models"] = []
+    if "plotted_metrics" not in st.session_state:
+        st.session_state["plotted_metrics"] = []
+
     # Display checkboxes for all models
     st.subheader("Select Models to Display Data")
 
@@ -247,29 +253,37 @@ def show_metrics_page(config):
         cols = st.columns(num_columns)
         for col, model in zip(cols, model_list[i:i + num_columns]):
             with col:
-                if st.checkbox(model):
+                if st.checkbox(model, value=model in st.session_state["selected_models"]):
                     selected_models.append(model)
+
+    st.session_state["selected_models"] = selected_models
 
     # Button to generate the plot
     if st.button("Generate Plot"):
         if selected_models:
-            # st.write(f"Selected Models: {', '.join(selected_models)}")
 
-            # Placeholder for generating and displaying the plot
-            st.write("Generating plot using data from the selected models...")
-            print(selected_models)
-            # Call your image creation function here
-            plotted_metrics = generate_metrics_plot(selected_date, selected_time, selected_models, config)
+            empty_space = st.empty()
+            with empty_space.container():
+                with st.status(f':hammer_and_wrench: **Loading results...**', expanded=True) as status:
+                    plotted_metrics = generate_metrics_plot(selected_date, selected_time, selected_models, config)
+                    # status.update(label=f"Done!", state="complete", expanded=True)
+                    st.session_state["plotted_metrics"] = plotted_metrics
+            empty_space.empty()
 
-            # Display a placeholder image
-            columns = st.columns([0.5, 0.5])
-            with columns[1]:
+        else:
+            st.warning("Please select at least one model.")
+
+    # Display the formula and plots if they exist in session state
+    if st.session_state["plotted_metrics"]:
+        with st.status(f'Done!', state='complete', expanded=True) as status:
+            columns = st.columns([0.5, 0.05, 0.3])
+            with columns[2]:
                 st.markdown(r"""
                     ### CSI Formula
                     The Critical Success Index (CSI) is calculated as:
-
+    
                     ### $$CSI = \frac{TP}{TP + FP + FN}$$
-
+    
                     Where:
                     - **TP** is the True Positives
                     - **FP** is the False Positives
@@ -277,7 +291,5 @@ def show_metrics_page(config):
                 """, unsafe_allow_html=True)
 
             with columns[0]:
-                for i, plot_buffer in enumerate(plotted_metrics):
+                for i, plot_buffer in enumerate(st.session_state["plotted_metrics"]):
                     st.image(plot_buffer)
-        else:
-            st.warning("Please select at least one model.")
