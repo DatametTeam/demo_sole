@@ -297,77 +297,77 @@ def show_real_time_prediction():
                     "</div>",
                     unsafe_allow_html=True)
 
-    map = folium.Map(location=[42.5, 12.5],
-                     zoom_start=5,
-                     control_scale=False,  # Disable control scale
-                     tiles='Esri.WorldGrayCanvas',  # Watercolor map style
-                     name="WorldGray",
-                     )
-    folium.TileLayer(
-        tiles='Esri.WorldImagery',  # Satellite imagery
-        name="Satellite",
-        control=True
-    ).add_to(map)
-
-    folium.TileLayer(
-        tiles='OpenStreetMap.Mapnik',  # Satellite imagery
-        name="OSM",
-        control=True
-    ).add_to(map)
-
-    if st.session_state.selected_model and st.session_state.selected_time:
-        img1 = np.load(
-            Path(
-                f"/davinci-1/work/protezionecivile/sole24/pred_teo/{st.session_state.selected_model}") /
-            "predictions.npy", mmap_mode='r')[0, time_options.index(st.session_state.selected_time)]
-        # img1 = np.load(
-        #     Path(
-        #         f"/davinci-1/work/protezionecivile/sole24/pred_teo/Test") /
-        #     "predictions.npy", mmap_mode='r')[0, 0]
-        img1 = np.array(img1)
-        img1[img1 < 0] = 0
-        with h5py.File("src/mask/radar_mask.hdf", "r") as f:
-            radar_mask = f["mask"][()]
-        img1 = img1 * radar_mask
-
-        sourceNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/sourceNode")
-        destNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/destNode")
-        img1 = dpg.warp.warp_map(sourceNode, destNode=destNode, source_data=img1)
-        img1 = np.nan_to_num(img1, nan=0)
-
-        img1[img1 < 0] = 0
-        img1 = img1.astype(float)
-
-        img_norm = norm(img1)
-        rgba_img = cmap(img_norm)
-
-        folium.raster_layers.ImageOverlay(
-            image=rgba_img,
-            bounds=[[35.0623, 4.51987], [47.5730, 20.4801]],
-            mercator_project=False,
-            origin="lower",
-            name="NWC_pred"
-            # opacity=0.5
+        map = folium.Map(location=[42.5, 12.5],
+                         zoom_start=5,
+                         control_scale=False,  # Disable control scale
+                         tiles='Esri.WorldGrayCanvas',  # Watercolor map style
+                         name="WorldGray",
+                         )
+        folium.TileLayer(
+            tiles='Esri.WorldImagery',  # Satellite imagery
+            name="Satellite",
+            control=True
         ).add_to(map)
 
-        data_min = 0  # Minimum value in your data
-        data_max = 100  # Maximum value in your data
+        folium.TileLayer(
+            tiles='OpenStreetMap.Mapnik',  # Satellite imagery
+            name="OSM",
+            control=True
+        ).add_to(map)
 
-        data_values = [0, 1, 2, 5, 10, 20, 30, 50, 75, 100]
-        normalized_values = norm(data_values)
+        if st.session_state.selected_model and st.session_state.selected_time:
+            img1 = np.load(
+                Path(
+                    f"/davinci-1/work/protezionecivile/sole24/pred_teo/{st.session_state.selected_model}") /
+                "predictions.npy", mmap_mode='r')[0, time_options.index(st.session_state.selected_time)]
+            # img1 = np.load(
+            #     Path(
+            #         f"/davinci-1/work/protezionecivile/sole24/pred_teo/Test") /
+            #     "predictions.npy", mmap_mode='r')[0, 0]
+            img1 = np.array(img1)
+            img1[img1 < 0] = 0
+            with h5py.File("src/mask/radar_mask.hdf", "r") as f:
+                radar_mask = f["mask"][()]
+            img1 = img1 * radar_mask
 
-        colormap = cm.LinearColormap(
-            colors=[cmap(n) for n in normalized_values],  # Generate 10 colors
-            index=data_values,  # Map to actual data values
-            vmin=data_min,
-            vmax=data_max
-        )
+            sourceNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/sourceNode")
+            destNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/destNode")
+            img1 = dpg.warp.warp_map(sourceNode, destNode=destNode, source_data=img1)
+            img1 = np.nan_to_num(img1, nan=0)
 
-        colormap.caption = "Prediction Intensity (mm/h)"
-        map.add_child(colormap)
+            img1[img1 < 0] = 0
+            img1 = img1.astype(float)
 
-    folium.LayerControl().add_to(map)
-    st_map = st_folium(map, width=700, height=600)
+            img_norm = norm(img1)
+            rgba_img = cmap(img_norm)
+
+            folium.raster_layers.ImageOverlay(
+                image=rgba_img,
+                bounds=[[35.0623, 4.51987], [47.5730, 20.4801]],
+                mercator_project=False,
+                origin="lower",
+                name="NWC_pred"
+                # opacity=0.5
+            ).add_to(map)
+
+            data_min = 0  # Minimum value in your data
+            data_max = 100  # Maximum value in your data
+
+            data_values = [0, 1, 2, 5, 10, 20, 30, 50, 75, 100]
+            normalized_values = norm(data_values)
+
+            colormap = cm.LinearColormap(
+                colors=[cmap(n) for n in normalized_values],  # Generate 10 colors
+                index=data_values,  # Map to actual data values
+                vmin=data_min,
+                vmax=data_max
+            )
+
+            colormap.caption = "Prediction Intensity (mm/h)"
+            map.add_child(colormap)
+
+        folium.LayerControl().add_to(map)
+        st_map = st_folium(map, width=800, height=600, use_container_width=True)
 
 
 def main(model_list):
