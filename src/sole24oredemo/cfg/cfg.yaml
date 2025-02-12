@@ -1,0 +1,9 @@
+models:
+  - ConvLSTM
+  - ED_ConvLSTM
+  - DynamicUnet
+  - ConvLSTMHeist
+  - pystep
+  - Test
+
+csi_threshold: [1, 5, 10, 20, 50]

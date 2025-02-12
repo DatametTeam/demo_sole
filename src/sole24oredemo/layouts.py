@@ -4,11 +4,14 @@ import streamlit as st
 from datetime import datetime, time, timedelta
 
 from PIL import Image
+from sole24oredemo.graphics import generate_metrics_plot
 from sole24oredemo.utils import compute_figure_gpd, create_colorbar_fig
 
 
-def configure_sidebar():
+def configure_sidebar(model_list):
     with st.sidebar:
+        st.image("imgs/LDO_logo_transp.png", use_container_width=True)  # Replace with the path to your logo
+
         st.markdown("<h1 style='font-size: 32px; font-weight: bold;'>NOWCASTING</h1>", unsafe_allow_html=True)
         with st.form("weather_prediction_form"):
             # Date inputs
@@ -30,7 +33,7 @@ def configure_sidebar():
             )
 
             # Model selection
-            model_name = st.selectbox("Select a model", ("ConvLSTM", "ED_ConvLSTM", "DynamicUnet", "Test"))
+            model_name = st.selectbox("Select a model", model_list)
 
             # Form submission
             submitted = st.form_submit_button("Submit", type="primary", use_container_width=True)
@@ -218,3 +221,63 @@ def init_second_tab_layout(groundtruth_images, target_frames, pred_frames):
             st.image(create_colorbar_fig(top_adj=0.85, bot_adj=0.07))
 
     return
+
+
+def show_metrics_page(config):
+    model_list = config.get("models", [])
+    # Select time
+    selected_date = st.date_input("Select date", value=datetime(2025, 1, 31).date(),
+                                  format="DD/MM/YYYY")  # TODO: rimettere now
+
+    # Select date
+    selected_time = st.time_input(
+        "Select time",
+        value=time(1, 0),
+        step=timedelta(minutes=5)  # 5-minute intervals
+    )
+
+    # Display checkboxes for all models
+    st.subheader("Select Models to Display Data")
+
+    selected_models = []
+    num_columns = 5  # Adjust the number of models per row here
+
+    # Create rows of checkboxes
+    for i in range(0, len(model_list), num_columns):
+        cols = st.columns(num_columns)
+        for col, model in zip(cols, model_list[i:i + num_columns]):
+            with col:
+                if st.checkbox(model):
+                    selected_models.append(model)
+
+    # Button to generate the plot
+    if st.button("Generate Plot"):
+        if selected_models:
+            # st.write(f"Selected Models: {', '.join(selected_models)}")
+
+            # Placeholder for generating and displaying the plot
+            st.write("Generating plot using data from the selected models...")
+            print(selected_models)
+            # Call your image creation function here
+            plotted_metrics = generate_metrics_plot(selected_date, selected_time, selected_models, config)
+
+            # Display a placeholder image
+            columns = st.columns([0.5, 0.5])
+            with columns[1]:
+                st.markdown(r"""
+                    ### CSI Formula
+                    The Critical Success Index (CSI) is calculated as:
+
+                    ### $$CSI = \frac{TP}{TP + FP + FN}$$
+
+                    Where:
+                    - **TP** is the True Positives
+                    - **FP** is the False Positives
+                    - **FN** is the False Negatives
+                """, unsafe_allow_html=True)
+
+            with columns[0]:
+                for i, plot_buffer in enumerate(plotted_metrics):
+                    st.image(plot_buffer)
+        else:
+            st.warning("Please select at least one model.")

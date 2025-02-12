@@ -4,14 +4,15 @@ import streamlit as st
 from pathlib import Path
 import time
 import numpy as np
-from layouts import configure_sidebar, init_prediction_visualization_layout, init_second_tab_layout, precompute_images
+from layouts import configure_sidebar, init_prediction_visualization_layout, init_second_tab_layout, precompute_images, \
+    show_metrics_page
 from pbs import is_pbs_available
 
 from sole24oredemo.parallel_code import create_fig_dict_in_parallel, create_sliding_window_gifs, \
     create_sliding_window_gifs_for_predictions
 from sole24oredemo.sou_py import dpg
 from sole24oredemo.utils import check_if_gif_present, load_gif_as_bytesio, create_colorbar_fig, \
-    get_closest_5_minute_time, read_groundtruth_and_target_data, lincol_2_yx, yx_2_latlon, cmap, norm
+    get_closest_5_minute_time, read_groundtruth_and_target_data, lincol_2_yx, yx_2_latlon, cmap, norm, load_config
 from datetime import time as dt_time
 from datetime import datetime, timedelta
 import folium
@@ -69,33 +70,37 @@ def submit_prediction_job(sidebar_args):
     return error, out_dir
 
 
-def get_prediction_results(out_dir, sidebar_args):
+def get_prediction_results(out_dir, sidebar_args, get_only_pred=False):
     # TODO: da fixare
     model_name = sidebar_args['model_name']
     pred_out_dir = Path(f"/davinci-1/work/protezionecivile/sole24/pred_teo/Test")
     model_out_dir = Path(f"/davinci-1/work/protezionecivile/sole24/pred_teo/{model_name}")
+    gt_array = None
 
-    print("Loading GT data")
-    gt_array = np.load(pred_out_dir / "predictions.npy", mmap_mode='r')[12:36]
-    print("GT data loaded")
-    gt_array = np.array(gt_array)
-    gt_array[gt_array < 0] = 0
-    # gt_array[gt_array > 200] = 200
-    # gt_array = (gt_array - np.min(gt_array)) / (np.max(gt_array) - np.min(gt_array))
+    if not get_only_pred:
+        print("Loading GT data")
+        gt_array = np.load(pred_out_dir / "predictions.npy", mmap_mode='r')[12:36]
+        print("GT data loaded")
+        gt_array = np.array(gt_array)
+        gt_array[gt_array < 0] = 0
+        # gt_array[gt_array > 200] = 200
+        # gt_array = (gt_array - np.min(gt_array)) / (np.max(gt_array) - np.min(gt_array))
 
     print("Loading pred data")
     pred_array = np.load(model_out_dir / "predictions.npy", mmap_mode='r')[0:24]
     if model_name == 'Test':  # TODO: sistemare
         pred_array = np.load(model_out_dir / "predictions.npy", mmap_mode='r')[12:36]
-    print("Loaded pred data")
     pred_array = np.array(pred_array)
     pred_array[pred_array < 0] = 0
+    print("Loaded pred data")
     # pred_array[pred_array > 200] = 200
     # pred_array = (pred_array - np.min(pred_array)) / (np.max(pred_array) - np.min(pred_array))
+    print("Loading radar mask")
     with h5py.File("src/mask/radar_mask.hdf", "r") as f:
         radar_mask = f["mask"][()]
+    print("Radar mask loaded")
 
-    pred_array = np.where(radar_mask == 1, pred_array, 0)
+    pred_array = pred_array * radar_mask
 
     print("*** LOADED DATA ***")
 
@@ -206,7 +211,7 @@ def show_prediction_page():
         "Select Date", min_value=datetime(2020, 1, 1).date(), max_value=datetime.today().date(), format="DD/MM/YYYY",
         value=datetime(2025, 2, 6).date())
     selected_time = st.time_input("Select Time", value=dt_time(15, 00))  # get_closest_5_minute_time(), s
-    selected_model = st.selectbox("Select model", ("ConvLSTM", "ED_ConvLSTM", "DynamicUnet", "Test"))
+    selected_model = st.selectbox("Select model", model_list)
 
     if st.button("Submit"):
         # Combine selected date and time
@@ -262,7 +267,7 @@ def show_real_time_prediction():
     if 'selected_time' not in st.session_state:
         st.session_state.selected_time = None
 
-    model_options = ["Test", "ConvLSTM", "ED_ConvLSTM", "DynamicUnet"]
+    model_options = model_list
     time_options = ["+5min", "+10min", "+15min", "+20min", "+25min",
                     "+30min", "+35min", "+40min", "+45min", "+50min",
                     "+55min", "+60min"]
@@ -320,6 +325,10 @@ def show_real_time_prediction():
         #         f"/davinci-1/work/protezionecivile/sole24/pred_teo/Test") /
         #     "predictions.npy", mmap_mode='r')[0, 0]
         img1 = np.array(img1)
+        img1[img1 < 0] = 0
+        with h5py.File("src/mask/radar_mask.hdf", "r") as f:
+            radar_mask = f["mask"][()]
+        img1 = img1 * radar_mask
 
         sourceNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/sourceNode")
         destNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/destNode")
@@ -361,13 +370,13 @@ def show_real_time_prediction():
     st_map = st_folium(map, width=700, height=600)
 
 
-def main():
-    sidebar_args = configure_sidebar()
+def main(model_list):
+    sidebar_args = configure_sidebar(model_list)
     if sidebar_args['submitted'] and 'prediction_result' in st.session_state:
         st.session_state.prediction_result = {}
 
     # Create tabs using st.tabs
-    tab1, tab2, tab3 = st.tabs(["Home", "Prediction by Date & Time", "Real Time Prediction"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Nowcasting", "Prediction by Date & Time", "Metrics", "Real Time Prediction"])
 
     with tab1:
         main_page(sidebar_args)
@@ -376,9 +385,15 @@ def main():
         show_prediction_page()
 
     with tab3:
+        show_metrics_page(config)
+
+    with tab4:
         show_real_time_prediction()
 
 
+config = load_config("src/sole24oredemo/cfg/cfg.yaml")
+model_list = config.get("models", [])
+
 if __name__ == "__main__":
     print("***NEWRUN***")
-    main()
+    main(model_list)

@@ -16,7 +16,8 @@ from PIL import Image
 
 
 def create_fig_dict_in_parallel(gt_data, pred_data, sidebar_args, save_on_disk=False):
-    out_dir = Path("/davinci-1/home/guidim/demo_sole/data/output/ConvLSTM/20250205/20250205/gen_images/gt")
+    gt_img_out_dir = Path(f"/davinci-1/home/guidim/demo_sole/data/output/imgs/{sidebar_args['model_name']}/gt")
+    pred_img_out_dir = Path(f"/davinci-1/home/guidim/demo_sole/data/output/imgs/{sidebar_args['model_name']}/pred")
 
     start_date = sidebar_args['start_date']
     start_time = sidebar_args['start_time']
@@ -34,7 +35,7 @@ def create_fig_dict_in_parallel(gt_data, pred_data, sidebar_args, save_on_disk=F
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         gt_results = []
         for i, result in enumerate(executor.map(
-                partial(save_figure, base_date=combined_start, time_step=time_step, out_dir=out_dir,
+                partial(save_figure, base_date=combined_start, time_step=time_step, out_dir=gt_img_out_dir,
                         save_on_disk=save_on_disk),
                 gt_data[:, 0], range(gt_data.shape[0])
         )):
@@ -53,7 +54,7 @@ def create_fig_dict_in_parallel(gt_data, pred_data, sidebar_args, save_on_disk=F
         total_sequences = pred_data.shape[0]
 
         for i, result in enumerate(executor.map(
-                partial(save_prediction_sequence, base_date=combined_start, time_step=time_step, out_dir=out_dir,
+                partial(save_prediction_sequence, base_date=combined_start, time_step=time_step, out_dir=pred_img_out_dir,
                         save_on_disk=save_on_disk),
                 pred_data, range(total_sequences)
         )):

@@ -13,6 +13,7 @@ from numba import njit
 import warnings
 import geopandas as gpd
 from datetime import datetime, timedelta
+import yaml
 
 ROOT_PATH = Path(__file__).parent.parent.absolute()
 
@@ -510,14 +511,17 @@ def read_groundtruth_and_target_data(selected_key, selected_model):
     if selected_model == 'Test':
         pred_array = np.load(out_dir / "predictions.npy", mmap_mode='r')[12:24, 0]
 
-    with h5py.File("src/mask/radar_mask.hdf", "r") as f:
+    with h5py.File("/archive/SSD/home/guidim/demo_sole/src/mask/radar_mask.hdf", "r") as f:
         radar_mask = f["mask"][()]
 
-    pred_array = np.where(radar_mask == 1, pred_array, 0)
+    pred_array = pred_array * radar_mask
+    target_array = target_array * radar_mask
+    gt_array = gt_array * radar_mask
 
     # Clean and normalize arrays
     gt_array = np.clip(gt_array, 0, 200)
     pred_array = np.clip(pred_array, 0, 200)
+    target_array = np.clip(target_array, 0, 200)
 
     # Convert selected_key to a datetime object
     selected_time = datetime.strptime(selected_key, "%d%m%Y_%H%M")
@@ -543,6 +547,12 @@ def read_groundtruth_and_target_data(selected_key, selected_model):
         pred_dict[timestamp] = pred_array[i]
 
     return gt_dict, target_dict, pred_dict
+
+
+def load_config(config_path):
+    with open(config_path, "r") as file:
+        config = yaml.safe_load(file)
+    return config
 
 
 lat_0 = 42.0

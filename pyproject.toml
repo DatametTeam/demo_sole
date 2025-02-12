@@ -24,6 +24,7 @@ dependencies = [
     "scikit-image==0.24.0",
     "deprecated==1.2.14",
     "seaborn==0.13.2",
-    "ipympl==0.9.6"
+    "ipympl==0.9.6",
+    "tqdm"
 
 ]
