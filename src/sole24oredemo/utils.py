@@ -14,6 +14,7 @@ import warnings
 import geopandas as gpd
 from datetime import datetime, timedelta
 import yaml
+import sou_py.dpg as dpg
 
 ROOT_PATH = Path(__file__).parent.parent.absolute()
 
@@ -553,6 +554,47 @@ def load_config(config_path):
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
     return config
+
+
+def get_latest_file(folder_path):
+    files = [f for f in os.listdir(folder_path) if f.endswith(".hdf")]
+    if not files:
+        return None
+    # Sort files based on the timestamp in their names
+    files.sort(key=lambda x: datetime.strptime(x.split(".")[0], "%d-%m-%Y-%H-%M"), reverse=True)
+    return files[0]  # Latest file
+
+
+def load_prediction_data(st, time_options):
+    if st.session_state.selected_model and st.session_state.selected_time:
+
+        img1 = np.load(
+            Path(
+                f"/davinci-1/work/protezionecivile/sole24/pred_teo/{st.session_state.selected_model}") /
+            "predictions.npy", mmap_mode='r')[0, time_options.index(st.session_state.selected_time)]
+        # img1 = np.load(
+        #     Path(
+        #         f"/davinci-1/work/protezionecivile/sole24/pred_teo/Test") /
+        #     "predictions.npy", mmap_mode='r')[0, 0]
+        img1 = np.array(img1)
+        img1[img1 < 0] = 0
+        with h5py.File("src/mask/radar_mask.hdf", "r") as f:
+            radar_mask = f["mask"][()]
+        img1 = img1 * radar_mask
+
+        sourceNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/sourceNode")
+        destNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/destNode")
+        img1 = dpg.warp.warp_map(sourceNode, destNode=destNode, source_data=img1)
+        img1 = np.nan_to_num(img1, nan=0)
+
+        img1[img1 < 0] = 0
+        img1 = img1.astype(float)
+
+        img_norm = norm(img1)
+        rgba_img = cmap(img_norm)
+        return rgba_img
+    else:
+        return None
 
 
 lat_0 = 42.0

@@ -4,7 +4,8 @@ import streamlit as st
 from pathlib import Path
 import time
 import numpy as np
-from layouts import configure_sidebar, init_prediction_visualization_layout, init_second_tab_layout, precompute_images, \
+from layouts import configure_sidebar, init_prediction_visualization_layout, init_second_tab_layout, \
+    precompute_images, \
     show_metrics_page
 from pbs import is_pbs_available
 
@@ -12,7 +13,8 @@ from sole24oredemo.parallel_code import create_fig_dict_in_parallel, create_slid
     create_sliding_window_gifs_for_predictions
 from sole24oredemo.sou_py import dpg
 from sole24oredemo.utils import check_if_gif_present, load_gif_as_bytesio, create_colorbar_fig, \
-    get_closest_5_minute_time, read_groundtruth_and_target_data, lincol_2_yx, yx_2_latlon, cmap, norm, load_config
+    get_closest_5_minute_time, read_groundtruth_and_target_data, lincol_2_yx, yx_2_latlon, cmap, norm, load_config, \
+    get_latest_file, load_prediction_data
 from datetime import time as dt_time
 from datetime import datetime, timedelta
 import folium
@@ -20,6 +22,7 @@ from streamlit_folium import st_folium
 import branca.colormap as cm
 
 st.set_page_config(page_title="Weather prediction", page_icon=":flag-eu:", layout="wide")
+
 
 if is_pbs_available():
     from pbs import submit_inference, get_job_status
