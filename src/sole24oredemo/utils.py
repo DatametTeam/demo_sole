@@ -1,5 +1,7 @@
 import io
 import os
+import threading
+import time
 from pathlib import Path
 
 import h5py
@@ -595,6 +597,40 @@ def load_prediction_data(st, time_options):
         return rgba_img
     else:
         return None
+
+
+def worker_thread(event):
+    thread_id = threading.get_ident()  # Get the thread ID
+    print(f"Worker thread (ID: {thread_id}) is doing some work...")
+    time.sleep(10)  # Simulate some work being done
+    print(f"Worker thread (ID: {thread_id}) has finished!")
+    event.set()  # Signal that the worker thread is done
+
+
+def launch_thread_execution(st, latest_file, columns):
+    st.session_state.latest_file = latest_file
+    print(f"New SRI file available! {latest_file}")
+    with columns[1]:
+        st.write("")
+        st.write("")
+        st.status(label="✅ Found new data!", state="complete", expanded=False)
+
+        event = threading.Event()
+        print(f"prima dell'if stato thread_started: {st.session_state.thread_started}")
+        if st.session_state.thread_started is None:
+            print("Starting thread")
+            # Start the worker thread only if no thread is running
+            thread = threading.Thread(target=worker_thread, args=(event,))
+            st.session_state.thread_started = True
+            thread.start()
+
+        with st.status(f':hammer_and_wrench: **Running prediction...**', expanded=True) as status:
+            status_placeholder = st.empty()
+            while not event.is_set():
+                time.sleep(0.1)  # Sleep for a short time to avoid blocking
+                status_placeholder.text("Still waiting...")
+        thread.join()
+        status.update(label="✅ Prediction completed!", state="complete", expanded=False)
 
 
 lat_0 = 42.0

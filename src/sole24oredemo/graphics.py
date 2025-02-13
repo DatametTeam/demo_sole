@@ -1,9 +1,11 @@
 import io
 from datetime import datetime
 
+import folium
 from matplotlib import pyplot as plt
 from sole24oredemo.metrics import compute_CSI
 from sole24oredemo.utils import read_groundtruth_and_target_data
+from streamlit_folium import st_folium
 
 
 def generate_metrics_plot(selected_date, selected_time, selected_models, config):
@@ -46,3 +48,26 @@ def generate_metrics_plot(selected_date, selected_time, selected_models, config)
         plt.close()
 
     return plots
+
+
+def create_map():
+    map = folium.Map(location=[42.5, 12.5],
+                     zoom_start=5,
+                     control_scale=False,  # Disable control scale
+                     tiles='Esri.WorldGrayCanvas',  # Watercolor map style
+                     name="WorldGray",
+                     )
+    folium.TileLayer(
+        tiles='Esri.WorldImagery',  # Satellite imagery
+        name="Satellite",
+        control=True
+    ).add_to(map)
+
+    folium.TileLayer(
+        tiles='OpenStreetMap.Mapnik',  # Satellite imagery
+        name="OSM",
+        control=True
+    ).add_to(map)
+    folium.LayerControl().add_to(map)
+
+    return map

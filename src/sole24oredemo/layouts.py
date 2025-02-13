@@ -4,8 +4,10 @@ import streamlit as st
 from datetime import datetime, time, timedelta
 
 from PIL import Image
-from sole24oredemo.graphics import generate_metrics_plot
+from folium import folium
+from sole24oredemo.graphics import generate_metrics_plot, create_map
 from sole24oredemo.utils import compute_figure_gpd, create_colorbar_fig
+from streamlit_folium import st_folium
 
 
 def configure_sidebar(model_list):
@@ -293,3 +295,33 @@ def show_metrics_page(config):
             with columns[0]:
                 for i, plot_buffer in enumerate(st.session_state["plotted_metrics"]):
                     st.image(plot_buffer)
+
+
+def display_map_layout(model_options, time_options, st, columns):
+    with columns[0]:
+        internal_columns = st.columns([0.3, 0.1, 0.3])
+        with internal_columns[0]:
+            # Select model, bound to session state
+            st.selectbox(
+                "Select a model",
+                options=model_options,
+                key="selected_model"
+            )
+
+        with internal_columns[2]:
+            # Select time, bound to session state
+            st.selectbox(
+                "Select a prediction time",
+                options=time_options,
+                key="selected_time",
+            )
+
+        # TODO: da fixare
+        st.markdown("<div style='text-align: center; font-size: 18px;'>"
+                    f"<b>Current Date: {st.session_state.latest_file}</b>"
+                    "</div>",
+                    unsafe_allow_html=True)
+
+        map = create_map()
+
+        return map

@@ -1,3 +1,5 @@
+import os
+import threading
 import h5py
 import pyproj
 import streamlit as st
@@ -6,7 +8,7 @@ import time
 import numpy as np
 from layouts import configure_sidebar, init_prediction_visualization_layout, init_second_tab_layout, \
     precompute_images, \
-    show_metrics_page
+    show_metrics_page, display_map_layout
 from pbs import is_pbs_available
 
 from sole24oredemo.parallel_code import create_fig_dict_in_parallel, create_sliding_window_gifs, \
@@ -14,21 +16,23 @@ from sole24oredemo.parallel_code import create_fig_dict_in_parallel, create_slid
 from sole24oredemo.sou_py import dpg
 from sole24oredemo.utils import check_if_gif_present, load_gif_as_bytesio, create_colorbar_fig, \
     get_closest_5_minute_time, read_groundtruth_and_target_data, lincol_2_yx, yx_2_latlon, cmap, norm, load_config, \
-    get_latest_file, load_prediction_data
+    get_latest_file, load_prediction_data, launch_thread_execution
 from datetime import time as dt_time
 from datetime import datetime, timedelta
 import folium
 from streamlit_folium import st_folium
 import branca.colormap as cm
+from threading import Event
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="Weather prediction", page_icon=":flag-eu:", layout="wide")
 
 
-if is_pbs_available():
-    from pbs import submit_inference, get_job_status
-else:
-    from mock import inference_mock as submit_inference, get_job_status
-
+# if is_pbs_available():
+#     from pbs import submit_inference, get_job_status
+# else:
+#     from mock import inference_mock as submit_inference, get_job_status
+#
 
 def update_prediction_visualization(gt0_gif, gt6_gif, gt12_gif, pred_gif_6, pred_gif_12):
     gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60, colorbar30, colorbar60 = \
@@ -269,6 +273,12 @@ def show_real_time_prediction():
         st.session_state.selected_model = None
     if 'selected_time' not in st.session_state:
         st.session_state.selected_time = None
+    if 'latest_file' not in st.session_state:
+        st.session_state.latest_file = None
+    if 'rgba_image' not in st.session_state:
+        st.session_state.rgba_image = None
+    if 'thread_started' not in st.session_state:
+        st.session_state.thread_started = None
 
     model_options = model_list
     time_options = ["+5min", "+10min", "+15min", "+20min", "+25min",
@@ -318,31 +328,19 @@ def show_real_time_prediction():
             control=True
         ).add_to(map)
 
+        latest_file = get_latest_file(SRI_FOLDER_DIR)
+        if latest_file != st.session_state.latest_file:
+            launch_thread_execution(st, latest_file, columns)
+        else:
+            print(f"Current SRI == Latest file processed! {latest_file}. Skipped prediction")
+
+            with columns[1]:
+                st.write("")
+                st.write("")
+                st.status(label="✅ Using latest data available", state="complete", expanded=False)
+
         if st.session_state.selected_model and st.session_state.selected_time:
-            img1 = np.load(
-                Path(
-                    f"/davinci-1/work/protezionecivile/sole24/pred_teo/{st.session_state.selected_model}") /
-                "predictions.npy", mmap_mode='r')[0, time_options.index(st.session_state.selected_time)]
-            # img1 = np.load(
-            #     Path(
-            #         f"/davinci-1/work/protezionecivile/sole24/pred_teo/Test") /
-            #     "predictions.npy", mmap_mode='r')[0, 0]
-            img1 = np.array(img1)
-            img1[img1 < 0] = 0
-            with h5py.File("src/mask/radar_mask.hdf", "r") as f:
-                radar_mask = f["mask"][()]
-            img1 = img1 * radar_mask
-
-            sourceNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/sourceNode")
-            destNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/destNode")
-            img1 = dpg.warp.warp_map(sourceNode, destNode=destNode, source_data=img1)
-            img1 = np.nan_to_num(img1, nan=0)
-
-            img1[img1 < 0] = 0
-            img1 = img1.astype(float)
-
-            img_norm = norm(img1)
-            rgba_img = cmap(img_norm)
+            rgba_img = load_prediction_data(st, time_options)
 
             folium.raster_layers.ImageOverlay(
                 image=rgba_img,
@@ -394,9 +392,13 @@ def main(model_list):
         show_real_time_prediction()
 
 
+COUNT = st_autorefresh(interval=10000)
+
 config = load_config("src/sole24oredemo/cfg/cfg.yaml")
 model_list = config.get("models", [])
+SRI_FOLDER_DIR = "/davinci-1/work/protezionecivile/data1/SRI_adj"
 
 if __name__ == "__main__":
     print("***NEWRUN***")
+
     main(model_list)
