@@ -27,12 +27,13 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="Weather prediction", page_icon=":flag-eu:", layout="wide")
 
-
 # if is_pbs_available():
-#     from pbs import submit_inference, get_job_status
+from pbs import submit_inference, get_job_status
+
+
 # else:
 #     from mock import inference_mock as submit_inference, get_job_status
-#
+
 
 def update_prediction_visualization(gt0_gif, gt6_gif, gt12_gif, pred_gif_6, pred_gif_12):
     gt_current, pred_current, gt_plus_30, pred_plus_30, gt_plus_60, pred_plus_60, colorbar30, colorbar60 = \
@@ -279,6 +280,12 @@ def show_real_time_prediction():
         st.session_state.rgba_image = None
     if 'thread_started' not in st.session_state:
         st.session_state.thread_started = None
+    if 'old_count' not in st.session_state:
+        st.session_state.old_count = COUNT
+
+    if COUNT != st.session_state.old_count:
+        st.session_state.thread_started = None
+        st.session_state.old_count = COUNT
 
     model_options = model_list
     time_options = ["+5min", "+10min", "+15min", "+20min", "+25min",
@@ -304,9 +311,10 @@ def show_real_time_prediction():
                 key="selected_time",
             )
 
-        # TODO: da fixare
+        latest_file = get_latest_file(SRI_FOLDER_DIR)
+
         st.markdown("<div style='text-align: center; font-size: 18px;'>"
-                    f"<b>Current Date: {datetime.now().strftime('%d-%m-%Y %H:%M')}</b>"
+                    f"<b>Current Date: {st.session_state.latest_file}</b>"
                     "</div>",
                     unsafe_allow_html=True)
 
@@ -328,9 +336,9 @@ def show_real_time_prediction():
             control=True
         ).add_to(map)
 
-        latest_file = get_latest_file(SRI_FOLDER_DIR)
         if latest_file != st.session_state.latest_file:
             launch_thread_execution(st, latest_file, columns)
+            st.session_state.selection = None
         else:
             print(f"Current SRI == Latest file processed! {latest_file}. Skipped prediction")
 
@@ -340,7 +348,7 @@ def show_real_time_prediction():
                 st.status(label="✅ Using latest data available", state="complete", expanded=False)
 
         if st.session_state.selected_model and st.session_state.selected_time:
-            rgba_img = load_prediction_data(st, time_options)
+            rgba_img = load_prediction_data(st, time_options, latest_file)
 
             folium.raster_layers.ImageOverlay(
                 image=rgba_img,
@@ -392,13 +400,41 @@ def main(model_list):
         show_real_time_prediction()
 
 
-COUNT = st_autorefresh(interval=10000)
+# Initial auto-refresh interval (in seconds)
+seconds_for_autorefresh = 100
+COUNT = st_autorefresh(interval=seconds_for_autorefresh * 1000)
+
+
+# Function to monitor time and adjust the refresh interval
+def monitor_time():
+    print("Monitor time thread started")
+    global seconds_for_autorefresh, COUNT
+    while True:
+        now = datetime.now()
+        # Check if the current minute is a multiple of 5 and seconds are close to 0
+        if now.minute % 5 == 0 and now.second < 5:
+            print(f"Time is {now}! Restarting app to force new prediction")
+            time.sleep(5)
+            st.rerun()
+
+        time.sleep(2)  # Check every second
+
+
+# Initialize the thread only once using session state
+if "autorefresh_thread_started" not in st.session_state:
+    st.session_state["autorefresh_thread_started"] = False
+
+if not st.session_state["autorefresh_thread_started"]:
+    thread = threading.Thread(target=monitor_time, daemon=True)
+    thread.start()
+    st.session_state["autorefresh_thread_started"] = True
 
 config = load_config("src/sole24oredemo/cfg/cfg.yaml")
 model_list = config.get("models", [])
 SRI_FOLDER_DIR = "/davinci-1/work/protezionecivile/data1/SRI_adj"
 
 if __name__ == "__main__":
-    print("***NEWRUN***")
+    print(f"***NEWRUN @ {datetime.now()}***")
+    # print(st.session_state)
 
     main(model_list)

@@ -36,7 +36,7 @@ def get_pbs_header(job_name, q_name, pbs_log_path, target_gpu=None):
         return f"""
 #PBS -N {job_name}
 #PBS -q {q_name}
-#PBS -l select=1:ncpus=1:ngpus=4,walltime=12:00:00
+#PBS -l select=1:ncpus=0:ngpus=0
 #PBS -k oe
 #PBS -j oe
 #PBS -o {pbs_log_path} 
@@ -53,23 +53,37 @@ def get_pbs_header(job_name, q_name, pbs_log_path, target_gpu=None):
 
 
 # TO UPDATE!
-def get_pbs_env():
-    return f"""
-module load proxy/proxy_20 python39 cuda12.1 gcc/11.2.0
-WORKDIR="$HOME/workspace/faradai"
-source "$WORKDIR/faradai/dreambooth_scripts/.venv/bin/activate"
-"""
+def get_pbs_env(model):
+    if model == 'ED_ConvLSTM':
+        env = f"""
+            module load proxy
+            module load anaconda3
+            source activate protezionecivile
+            """
+    elif model == 'pystep':
+
+        env = f"""
+            module load proxy
+            module load anaconda3
+            source activate nowcasting
+            """
+    else:
+        env = f"""
+            module load proxy
+            module load anaconda3
+            source activate sole24_310
+            """
+    return env
 
 
 def submit_inference(args) -> tuple[str, str]:
-
     return 0, []
 
     start_date, end_date, model_name, submitted = args
 
     # TO UPDATE!
     out_dir = OUTPUT_DATA_DIR / model_name / start_date.strftime("%Y%m%d") / end_date.strftime("%Y%m%d")
-    
+
     # DEFINE THE OUTPUT DIRECTORY ! TO UPDATE!
     date_now = datetime.now().strftime("%Y%m%d%H%M%S")
     out_images_dir = out_dir / "generations" / date_now
@@ -111,3 +125,49 @@ python3 "$WORKDIR/faradai/dreambooth_scripts/run_inference.py" \
         print("Error occurred while submitting the job!")
         print("Error message:", e.stderr.strip())
         return None, None
+
+
+def start_prediction_job(model, latest_data):
+    latest_data = latest_data.split('.')[0]
+
+    if model == 'ED_ConvLSTM':
+
+        cmd_string = f"""
+    python "/archive/SSD/home/guidim/protezione_civile/nowcasting/nwc_test_webapp.py" \
+        start_date={str(latest_data)}
+        """
+    else:
+        cmd_string = f"""
+    python "/archive/SSD/home/guidim/demo_sole/src/sole24oredemo/inference_scripts/run_{model}_inference.py" \
+        --start_date={str(latest_data)}
+        """
+
+    print(f"cmd_string: \n > {cmd_string}")
+    pbs_logs = Path("/davinci-1/home/guidim/pbs_logs")
+    pbs_logs.mkdir(parents=True, exist_ok=True)
+
+    pbs_script = "#!/bin/bash"
+    pbs_script += get_pbs_header("sole24ore_demo", 'fast', str(pbs_logs / "pbs.log"))
+    pbs_script += get_pbs_env(model)
+    pbs_script += f"\n{cmd_string}"
+
+    pbs_scripts = Path("/archive/SSD/home/guidim/demo_sole/src/sole24oredemo/pbs_scripts")
+    pbs_scripts.mkdir(parents=True, exist_ok=True)
+    pbs_script_path = pbs_scripts / f"run_{model}_inference.sh"
+    with open(pbs_script_path, "w", encoding="utf-8") as f:
+        f.write(pbs_script)
+
+    # Command to execute the script with qsub
+    command = ["qsub", pbs_script_path]
+
+    try:
+        result = subprocess.run(command, check=True, text=True, capture_output=True)
+        print("Inference job submitted successfully!")
+        job_id = result.stdout.strip().split(".davinci-mgt01")[0]
+        print("Job ID:", job_id)
+        return job_id
+
+    except subprocess.CalledProcessError as e:
+        print("Error occurred while submitting the job!")
+        print("Error message:", e.stderr.strip())
+        return None

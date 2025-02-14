@@ -6,17 +6,16 @@ from pathlib import Path
 
 import h5py
 import pyproj
-from PIL import Image
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import numpy as np
-from mpl_toolkits.basemap import Basemap
 from numba import njit
 import warnings
 import geopandas as gpd
 from datetime import datetime, timedelta
 import yaml
 import sou_py.dpg as dpg
+from sole24oredemo.pbs import start_prediction_job
 
 ROOT_PATH = Path(__file__).parent.parent.absolute()
 
@@ -567,18 +566,24 @@ def get_latest_file(folder_path):
     return files[0]  # Latest file
 
 
-def load_prediction_data(st, time_options):
+def load_prediction_data(st, time_options, latest_file):
     if st.session_state.selected_model and st.session_state.selected_time:
 
-        img1 = np.load(
-            Path(
-                f"/davinci-1/work/protezionecivile/sole24/pred_teo/{st.session_state.selected_model}") /
-            "predictions.npy", mmap_mode='r')[0, time_options.index(st.session_state.selected_time)]
-        # img1 = np.load(
-        #     Path(
-        #         f"/davinci-1/work/protezionecivile/sole24/pred_teo/Test") /
-        #     "predictions.npy", mmap_mode='r')[0, 0]
-        img1 = np.array(img1)
+        if st.session_state.selected_model == 'ED_ConvLSTM':
+            latest_npy = Path(latest_file).stem + '.npy'
+            img1 = np.load(f"/davinci-1/work/protezionecivile/sole24/pred_teo/real_time_pred/ED_ConvLSTM/{latest_npy}")[
+                0, time_options.index(st.session_state.selected_time)]
+
+        else:
+            img1 = np.load(
+                Path(
+                    f"/davinci-1/work/protezionecivile/sole24/pred_teo/{st.session_state.selected_model}") /
+                "predictions.npy", mmap_mode='r')[0, time_options.index(st.session_state.selected_time)]
+            # img1 = np.load(
+            #     Path(
+            #         f"/davinci-1/work/protezionecivile/sole24/pred_teo/Test") /
+            #     "predictions.npy", mmap_mode='r')[0, 0]
+            img1 = np.array(img1)
         img1[img1 < 0] = 0
         with h5py.File("src/mask/radar_mask.hdf", "r") as f:
             radar_mask = f["mask"][()]
@@ -599,10 +604,26 @@ def load_prediction_data(st, time_options):
         return None
 
 
-def worker_thread(event):
+def worker_thread(event, latest_file, models_list=None):
+    output_dir = f"/davinci-1/work/protezionecivile/sole24/pred_teo/real_time_pred"
     thread_id = threading.get_ident()  # Get the thread ID
-    print(f"Worker thread (ID: {thread_id}) is doing some work...")
-    time.sleep(10)  # Simulate some work being done
+    print(f"Worker thread (ID: {thread_id}) is starting prediction...")
+
+    model = 'ED_ConvLSTM'
+
+    jobs_ids = []
+    new_file = Path(latest_file).stem + '.npy'
+    if not os.path.exists(os.path.join(output_dir, model, new_file)):
+        print(f"File {os.path.join(output_dir, model, new_file)} does not exists. Starting prediction")
+        job_id = start_prediction_job(model, latest_file)
+        jobs_ids.append(job_id)
+    else:
+        print(f"Prediction already computed! {latest_file} exists for {model}.")
+
+    print(f"Looking for {os.path.join(output_dir, model, new_file)}")
+    while not os.path.exists(os.path.join(output_dir, model, new_file)):
+        print("Prediction still going")
+        time.sleep(2)
     print(f"Worker thread (ID: {thread_id}) has finished!")
     event.set()  # Signal that the worker thread is done
 
@@ -620,15 +641,17 @@ def launch_thread_execution(st, latest_file, columns):
         if st.session_state.thread_started is None:
             print("Starting thread")
             # Start the worker thread only if no thread is running
-            thread = threading.Thread(target=worker_thread, args=(event,))
+            thread = threading.Thread(target=worker_thread, args=(event, latest_file))
             st.session_state.thread_started = True
             thread.start()
 
         with st.status(f':hammer_and_wrench: **Running prediction...**', expanded=True) as status:
             status_placeholder = st.empty()
+            i = 1
             while not event.is_set():
-                time.sleep(0.1)  # Sleep for a short time to avoid blocking
-                status_placeholder.text("Still waiting...")
+                time.sleep(1)  # Sleep for a short time to avoid blocking
+                status_placeholder.text("Prediction running" + "." * i)
+                i += 1
         thread.join()
         status.update(label="✅ Prediction completed!", state="complete", expanded=False)
 
