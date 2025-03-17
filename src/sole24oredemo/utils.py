@@ -648,9 +648,10 @@ def launch_thread_execution(st, latest_file, columns):
         with st.status(f':hammer_and_wrench: **Running prediction...**', expanded=True) as status:
             status_placeholder = st.empty()
             i = 1
+            time_prediction = time.time()
             while not event.is_set():
                 time.sleep(1)  # Sleep for a short time to avoid blocking
-                status_placeholder.text("Prediction running" + "." * i)
+                status_placeholder.text(f"Prediction running for {int(time.time() - time_prediction)} seconds")
                 i += 1
         thread.join()
         status.update(label="✅ Prediction completed!", state="complete", expanded=False)

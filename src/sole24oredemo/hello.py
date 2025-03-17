@@ -407,7 +407,7 @@ COUNT = st_autorefresh(interval=seconds_for_autorefresh * 1000)
 
 # Function to monitor time and adjust the refresh interval
 def monitor_time():
-    print("Monitor time thread started")
+    print("Starting Monitor time thread")
     global seconds_for_autorefresh, COUNT
     while True:
         now = datetime.now()
