@@ -673,7 +673,8 @@ ur_lat = 47
 ll_lon = 6.5
 ur_lon = 20
 
-italy_shape = gpd.read_file("/davinci-1/home/guidim/demo_sole/src/shapefiles/italian_regions/gadm41_ITA_1.shp")
+src_dir = Path(__file__).resolve().parent.parent
+italy_shape = gpd.read_file(os.path.join(src_dir, "shapefiles/italian_regions/gadm41_ITA_1.shp"))
 # Define the custom Transverse Mercator projection
 custom_crs = {
     "proj": "tmerc",  # Transverse Mercator projection

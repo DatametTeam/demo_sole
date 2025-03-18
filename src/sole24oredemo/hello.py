@@ -429,7 +429,8 @@ if not st.session_state["autorefresh_thread_started"]:
     thread.start()
     st.session_state["autorefresh_thread_started"] = True
 
-config = load_config("src/sole24oredemo/cfg/cfg.yaml")
+src_dir = Path(__file__).resolve().parent.parent
+config = load_config(os.path.join(src_dir, "sole24oredemo/cfg/cfg.yaml"))
 model_list = config.get("models", [])
 SRI_FOLDER_DIR = "/davinci-1/work/protezionecivile/data1/SRI_adj"
 

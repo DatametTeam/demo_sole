@@ -1,4 +1,6 @@
 import io
+import os.path
+from pathlib import Path
 
 import streamlit as st
 from datetime import datetime, time, timedelta
@@ -12,7 +14,8 @@ from streamlit_folium import st_folium
 
 def configure_sidebar(model_list):
     with st.sidebar:
-        st.image("imgs/LDO_logo_transp.png", use_container_width=True)  # Replace with the path to your logo
+        root_dir = Path(__file__).resolve().parent.parent.parent
+        st.image(os.path.join(root_dir, "imgs/LDO_logo_transp.png"), use_container_width=True)  # Replace with the path to your logo
 
         st.markdown("<h1 style='font-size: 32px; font-weight: bold;'>NOWCASTING</h1>", unsafe_allow_html=True)
         with st.form("weather_prediction_form"):
