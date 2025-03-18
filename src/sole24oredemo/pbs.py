@@ -1,3 +1,4 @@
+import os.path
 import subprocess
 from pathlib import Path
 
@@ -151,7 +152,8 @@ def start_prediction_job(model, latest_data):
     pbs_script += get_pbs_env(model)
     pbs_script += f"\n{cmd_string}"
 
-    pbs_scripts = Path("/archive/SSD/home/guidim/demo_sole/src/sole24oredemo/pbs_scripts")
+    src_dir = Path(__file__).resolve().parent.parent
+    pbs_scripts = Path(os.path.join(src_dir, "sole24oredemo/pbs_scripts"))
     pbs_scripts.mkdir(parents=True, exist_ok=True)
     pbs_script_path = pbs_scripts / f"run_{model}_inference.sh"
     with open(pbs_script_path, "w", encoding="utf-8") as f:
@@ -161,6 +163,8 @@ def start_prediction_job(model, latest_data):
     command = ["qsub", pbs_script_path]
 
     try:
+        print("COMMAND")
+        print(command)
         result = subprocess.run(command, check=True, text=True, capture_output=True)
         print("Inference job submitted successfully!")
         job_id = result.stdout.strip().split(".davinci-mgt01")[0]

@@ -1,5 +1,6 @@
 import io
 import os
+import random
 import threading
 import time
 from pathlib import Path
@@ -563,7 +564,10 @@ def get_latest_file(folder_path):
         return None
     # Sort files based on the timestamp in their names
     files.sort(key=lambda x: datetime.strptime(x.split(".")[0], "%d-%m-%Y-%H-%M"), reverse=True)
-    return files[0]  # Latest file
+
+    # aggiustamento di test, non pushare!
+    rand = random.randint(0, int(len(files) / 2))
+    return files[rand]  # Latest file
 
 
 def load_prediction_data(st, time_options, latest_file):
@@ -575,18 +579,14 @@ def load_prediction_data(st, time_options, latest_file):
                 0, time_options.index(st.session_state.selected_time)]
 
         else:
-            img1 = np.load(
-                Path(
-                    f"/davinci-1/work/protezionecivile/sole24/pred_teo/{st.session_state.selected_model}") /
-                "predictions.npy", mmap_mode='r')[0, time_options.index(st.session_state.selected_time)]
-            # img1 = np.load(
-            #     Path(
-            #         f"/davinci-1/work/protezionecivile/sole24/pred_teo/Test") /
-            #     "predictions.npy", mmap_mode='r')[0, 0]
+            img1 = np.random.random((1, 12, 1400, 1200))[0, time_options.index(st.session_state.selected_time)]
             img1 = np.array(img1)
+
         img1[img1 < 0] = 0
-        with h5py.File("src/mask/radar_mask.hdf", "r") as f:
+        src_dir = Path(__file__).resolve().parent.parent
+        with h5py.File(os.path.join(src_dir, "mask/radar_mask.hdf"), "r") as f:
             radar_mask = f["mask"][()]
+
         img1 = img1 * radar_mask
 
         sourceNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/sourceNode")
@@ -640,20 +640,12 @@ def launch_thread_execution(st, latest_file, columns):
         print(f"prima dell'if stato thread_started: {st.session_state.thread_started}")
         if st.session_state.thread_started is None:
             print("Starting thread")
-            # Start the worker thread only if no thread is running
-            thread = threading.Thread(target=worker_thread, args=(event, latest_file))
-            st.session_state.thread_started = True
-            thread.start()
 
         with st.status(f':hammer_and_wrench: **Running prediction...**', expanded=True) as status:
             status_placeholder = st.empty()
-            i = 1
             time_prediction = time.time()
-            while not event.is_set():
-                time.sleep(1)  # Sleep for a short time to avoid blocking
-                status_placeholder.text(f"Prediction running for {int(time.time() - time_prediction)} seconds")
-                i += 1
-        thread.join()
+            time.sleep(5)
+            status_placeholder.text(f"Prediction running for {int(time.time() - time_prediction)} seconds")
         status.update(label="✅ Prediction completed!", state="complete", expanded=False)
 
 

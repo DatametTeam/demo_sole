@@ -311,6 +311,8 @@ def show_real_time_prediction():
                 key="selected_time",
             )
 
+        # torna un file random nella cartella di test
+        # questa cosa è chiamata ogni volta che l'interfaccia cambia
         latest_file = get_latest_file(SRI_FOLDER_DIR)
 
         st.markdown("<div style='text-align: center; font-size: 18px;'>"
@@ -336,6 +338,9 @@ def show_real_time_prediction():
             control=True
         ).add_to(map)
 
+        # devo simulare questa cosa randomica
+        # praticamente ogni tot secondi devo fare in modo che un file nuovo venga messo nella cartella dei latest_files
+        # in modo che la modifica sia rilevata
         if latest_file != st.session_state.latest_file:
             launch_thread_execution(st, latest_file, columns)
             st.session_state.selection = None
@@ -348,6 +353,7 @@ def show_real_time_prediction():
                 st.status(label="✅ Using latest data available", state="complete", expanded=False)
 
         if st.session_state.selected_model and st.session_state.selected_time:
+            print("LOAD PREDICTION DATA..")
             rgba_img = load_prediction_data(st, time_options, latest_file)
 
             folium.raster_layers.ImageOverlay(
@@ -432,7 +438,10 @@ if not st.session_state["autorefresh_thread_started"]:
 src_dir = Path(__file__).resolve().parent.parent
 config = load_config(os.path.join(src_dir, "sole24oredemo/cfg/cfg.yaml"))
 model_list = config.get("models", [])
-SRI_FOLDER_DIR = "/davinci-1/work/protezionecivile/data1/SRI_adj"
+
+# tampone locale, da non pushare!
+root_dir = src_dir.parent
+SRI_FOLDER_DIR = str(os.path.join(root_dir, "SRI_adj"))
 
 if __name__ == "__main__":
     print(f"***NEWRUN @ {datetime.now()}***")
