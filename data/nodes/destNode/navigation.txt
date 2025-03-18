@@ -1,0 +1,9 @@
+projection    = Mercator
+prj_lat    = 0
+prj_lon    = 12.5
+ncols    = 1200
+nlines    = 1400
+minLon    = 4.51987
+maxLon    = 20.4801
+minLat    = 35.0623
+maxLat    = 47.5730

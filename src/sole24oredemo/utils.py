@@ -589,8 +589,8 @@ def load_prediction_data(st, time_options, latest_file):
 
         img1 = img1 * radar_mask
 
-        sourceNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/sourceNode")
-        destNode = dpg.tree.createTree("/davinci-1/home/guidim/demo_sole/data/output/nodes/destNode")
+        sourceNode = dpg.tree.createTree("data/nodes/sourceNode")
+        destNode = dpg.tree.createTree("data/nodes/destNode")
         img1 = dpg.warp.warp_map(sourceNode, destNode=destNode, source_data=img1)
         img1 = np.nan_to_num(img1, nan=0)
 
