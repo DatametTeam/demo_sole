@@ -3,6 +3,7 @@ import threading
 import h5py
 import pyproj
 import streamlit as st
+from streamlit.components.v1 import html
 from pathlib import Path
 import time
 import numpy as np
@@ -269,6 +270,8 @@ def show_home_page():
 
 
 def show_real_time_prediction():
+    time_for_reloading_data = 45
+
     # Initial state management
     if 'selected_model' not in st.session_state:
         st.session_state.selected_model = None
@@ -283,17 +286,13 @@ def show_real_time_prediction():
     if 'old_count' not in st.session_state:
         st.session_state.old_count = COUNT
 
-    if COUNT != st.session_state.old_count:
-        st.session_state.thread_started = None
-        st.session_state.old_count = COUNT
-
     model_options = model_list
     time_options = ["+5min", "+10min", "+15min", "+20min", "+25min",
                     "+30min", "+35min", "+40min", "+45min", "+50min",
                     "+55min", "+60min"]
 
     columns = st.columns([0.5, 0.5])
-    with columns[0]:
+    with (columns[0]):
         internal_columns = st.columns([0.3, 0.1, 0.3])
         with internal_columns[0]:
             # Select model, bound to session state
@@ -311,15 +310,17 @@ def show_real_time_prediction():
                 key="selected_time",
             )
 
-        # torna un file random nella cartella di test
-        # questa cosa è chiamata ogni volta che l'interfaccia cambia
-        latest_file = get_latest_file(SRI_FOLDER_DIR)
+        # questa cosa è chiamata solo la prima volta che viene eseguito il codice
+        if "last_map_update" not in st.session_state:
+            st.session_state["last_map_update"] = None
+            st.session_state["last_map_update"] = datetime.now().second
+            latest_file = get_latest_file(SRI_FOLDER_DIR)
+            st.session_state["latest_"] = latest_file
+            if "new_update" not in st.session_state:
+                st.session_state["new_update"] = None
+            st.session_state["new_update"] = True
 
-        st.markdown("<div style='text-align: center; font-size: 18px;'>"
-                    f"<b>Current Date: {st.session_state.latest_file}</b>"
-                    "</div>",
-                    unsafe_allow_html=True)
-
+        # creazione mappa solo la prima volta
         map = folium.Map(location=[42.5, 12.5],
                          zoom_start=5,
                          control_scale=False,  # Disable control scale
@@ -338,10 +339,41 @@ def show_real_time_prediction():
             control=True
         ).add_to(map)
 
+        # qua serve:
+        # -- thread che controlla l'aggiornamento dei dati
+        # -- thread che calcola le previsioni quando ci sono dati nuovi
+
+        now = datetime.now().second
+
+        print("----------------------------------------------------")
+        diff = now - st.session_state["last_map_update"] if now >= st.session_state["last_map_update"] else (
+                    60 - st.session_state["last_map_update"] + now)
+        print(now)
+        print(st.session_state["last_map_update"])
+        print("---> " + str(diff))
+        print("----------------------------------------------------")
+
+        # ogni 5 secondi è possibile verificare se esiste un nuovo aggiornamento dei dati di input
+        # in questa versione basta refreshare la pagina (interagire con la mappa)
+        if diff >= time_for_reloading_data:
+            print("OBTAINING NEW INPUT FILE VERSION..")
+            st.session_state["last_map_update"] = datetime.now().second
+            latest_file = get_latest_file(SRI_FOLDER_DIR)
+            st.session_state["latest_"] = latest_file
+            st.session_state["new_update"] = True
+
+        st.markdown("<div style='text-align: center; font-size: 18px;'>"
+                    f"<b>Current Date: {st.session_state.latest_file}</b>"
+                    "</div>",
+                    unsafe_allow_html=True)
+
         # devo simulare questa cosa randomica
         # praticamente ogni tot secondi devo fare in modo che un file nuovo venga messo nella cartella dei latest_files
         # in modo che la modifica sia rilevata
+        latest_file = st.session_state["latest_"]
         if latest_file != st.session_state.latest_file:
+            # calcolo della previsione
+            print("LAUNCH PREDICTION..")
             launch_thread_execution(st, latest_file, columns)
             st.session_state.selection = None
         else:
@@ -353,8 +385,13 @@ def show_real_time_prediction():
                 st.status(label="✅ Using latest data available", state="complete", expanded=False)
 
         if st.session_state.selected_model and st.session_state.selected_time:
-            print("LOAD PREDICTION DATA..")
-            rgba_img = load_prediction_data(st, time_options, latest_file)
+            with columns[1]:
+                with st.status(f':hammer_and_wrench: **Loading prediction...**', expanded=True) as status:
+                    print("LOAD PREDICTION DATA..")
+
+                    # il problema è che quando questa cosa viene eseguita più volte di fila blocca tutto
+                    rgba_img = load_prediction_data(st, time_options, latest_file)
+                status.update(label="✅ Loading completed!", state="complete", expanded=False)
 
             folium.raster_layers.ImageOverlay(
                 image=rgba_img,
@@ -380,6 +417,8 @@ def show_real_time_prediction():
 
             colormap.caption = "Prediction Intensity (mm/h)"
             map.add_child(colormap)
+
+            st.session_state["new_update"] = False
 
         folium.LayerControl().add_to(map)
         st_map = st_folium(map, width=800, height=600, use_container_width=True)
@@ -431,8 +470,8 @@ if "autorefresh_thread_started" not in st.session_state:
     st.session_state["autorefresh_thread_started"] = False
 
 if not st.session_state["autorefresh_thread_started"]:
-    thread = threading.Thread(target=monitor_time, daemon=True)
-    thread.start()
+    # thread = threading.Thread(target=monitor_time, daemon=True)
+    # thread.start()
     st.session_state["autorefresh_thread_started"] = True
 
 src_dir = Path(__file__).resolve().parent.parent

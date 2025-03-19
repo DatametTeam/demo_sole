@@ -16,6 +16,7 @@ import geopandas as gpd
 from datetime import datetime, timedelta
 import yaml
 import sou_py.dpg as dpg
+import streamlit as st
 from sole24oredemo.pbs import start_prediction_job
 
 ROOT_PATH = Path(__file__).parent.parent.absolute()
@@ -567,9 +568,26 @@ def get_latest_file(folder_path):
 
     # aggiustamento di test, non pushare!
     rand = random.randint(0, int(len(files) / 2))
-    return files[rand]  # Latest file
+    return files[rand]
 
 
+def generate_splotchy_image(height, width, num_clusters, cluster_radius):
+    image = np.zeros((height, width))
+    cluster_centers = np.random.randint(0, min(height, width), size=(num_clusters, 2))
+
+    for center in cluster_centers:
+        cluster_x, cluster_y = center
+        for i in range(height):
+            for j in range(width):
+                dist = np.sqrt((i - cluster_x) ** 2 + (j - cluster_y) ** 2)
+                if dist < cluster_radius:
+                    image[i, j] += np.random.random() * (1 - dist / cluster_radius)
+
+    image = np.clip(image, 0, 1)
+    return image
+
+
+@st.cache_data(ttl=62)
 def load_prediction_data(st, time_options, latest_file):
     if st.session_state.selected_model and st.session_state.selected_time:
 
@@ -579,7 +597,12 @@ def load_prediction_data(st, time_options, latest_file):
                 0, time_options.index(st.session_state.selected_time)]
 
         else:
-            img1 = np.random.random((1, 12, 1400, 1200))[0, time_options.index(st.session_state.selected_time)]
+            # img1 = np.random.random((1, 12, 1400, 1200))[0, time_options.index(st.session_state.selected_time)]
+            height = 1400
+            width = 1200
+            num_clusters = 10
+            cluster_radius = 100
+            img1 = generate_splotchy_image(height, width, num_clusters, cluster_radius)
             img1 = np.array(img1)
 
         img1[img1 < 0] = 0
@@ -589,8 +612,9 @@ def load_prediction_data(st, time_options, latest_file):
 
         img1 = img1 * radar_mask
 
-        sourceNode = dpg.tree.createTree("data/nodes/sourceNode")
-        destNode = dpg.tree.createTree("data/nodes/destNode")
+        root_dir = Path(__file__).resolve().parent.parent.parent
+        sourceNode = dpg.tree.createTree(str(os.path.join(root_dir, "data/nodes/sourceNode")))
+        destNode = dpg.tree.createTree(str(os.path.join(root_dir, "data/nodes/destNode")))
         img1 = dpg.warp.warp_map(sourceNode, destNode=destNode, source_data=img1)
         img1 = np.nan_to_num(img1, nan=0)
 
@@ -628,6 +652,17 @@ def worker_thread(event, latest_file, models_list=None):
     event.set()  # Signal that the worker thread is done
 
 
+def worker_thread_test(event):
+    # simulazione del tempo di previsione
+    thread_id = threading.get_ident()
+    print(f"Worker thread (ID: {thread_id}) is starting prediction...")
+
+    time.sleep(5)
+
+    print(f"Worker thread (ID: {thread_id}) has finished!")
+    event.set()
+
+
 def launch_thread_execution(st, latest_file, columns):
     st.session_state.latest_file = latest_file
     print(f"New SRI file available! {latest_file}")
@@ -638,14 +673,21 @@ def launch_thread_execution(st, latest_file, columns):
 
         event = threading.Event()
         print(f"prima dell'if stato thread_started: {st.session_state.thread_started}")
-        if st.session_state.thread_started is None:
-            print("Starting thread")
+        print("Starting thread")
+        # Start the worker thread only if no thread is running
+        thread = threading.Thread(target=worker_thread_test, args=(event,))
+        st.session_state.thread_started = True
+        thread.start()
 
         with st.status(f':hammer_and_wrench: **Running prediction...**', expanded=True) as status:
             status_placeholder = st.empty()
+            i = 1
             time_prediction = time.time()
-            time.sleep(5)
-            status_placeholder.text(f"Prediction running for {int(time.time() - time_prediction)} seconds")
+            while not event.is_set():
+                status_placeholder.text(f"Prediction running for {int(time.time() - time_prediction)} seconds")
+                i += 1
+                time.sleep(1)
+        thread.join()
         status.update(label="✅ Prediction completed!", state="complete", expanded=False)
 
 
