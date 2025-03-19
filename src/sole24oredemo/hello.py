@@ -7,6 +7,8 @@ from streamlit.components.v1 import html
 from pathlib import Path
 import time
 import numpy as np
+from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx, add_script_run_ctx
+
 from layouts import configure_sidebar, init_prediction_visualization_layout, init_second_tab_layout, \
     precompute_images, \
     show_metrics_page, display_map_layout
@@ -269,8 +271,33 @@ def show_home_page():
         st.write("No GIFs available yet.")
 
 
+def thread_for_position():
+    thread_id = threading.get_ident()
+    print(f"Worker thread (ID: {thread_id}) is starting...")
+    while True:
+        if "st_map" in st.session_state:
+            st_map = st.session_state["st_map"]
+            if 'center' in st_map.keys() and 'zoom' in st_map.keys():
+                print("THREAD - " + str(st_map['center']) + " -- " + str(st_map['zoom']))
+                st.session_state["center"] = st_map['center']
+                st.session_state["zoom"] = st_map['zoom']
+            else:
+                print("THREAD - center / zoom not available..")
+        else:
+            print("THREAD - st_map not available..")
+        time.sleep(0.4)
+
+
 def show_real_time_prediction():
     time_for_reloading_data = 45
+
+    if "thread_for_position" not in st.session_state:
+        print("THREAD - start")
+        ctx = get_script_run_ctx()
+        st.session_state["thread_for_position"] = True
+        thread_for_pos = threading.Thread(target=thread_for_position, args=())
+        add_script_run_ctx(thread_for_pos, ctx)
+        thread_for_pos.start()
 
     # Initial state management
     if 'selected_model' not in st.session_state:
@@ -320,9 +347,16 @@ def show_real_time_prediction():
                 st.session_state["new_update"] = None
             st.session_state["new_update"] = True
 
+        if "center" in st.session_state and "zoom" in st.session_state:
+            center = st.session_state["center"]
+            zoom = st.session_state["zoom"]
+        else:
+            center = {'lat': 42.5, 'lng': 12.5}
+            zoom = 5
+
         # creazione mappa solo la prima volta
-        map = folium.Map(location=[42.5, 12.5],
-                         zoom_start=5,
+        map = folium.Map(location=[center['lat'], center['lng']],
+                         zoom_start=zoom,
                          control_scale=False,  # Disable control scale
                          tiles='Esri.WorldGrayCanvas',  # Watercolor map style
                          name="WorldGray",
@@ -422,6 +456,7 @@ def show_real_time_prediction():
 
         folium.LayerControl().add_to(map)
         st_map = st_folium(map, width=800, height=600, use_container_width=True)
+        st.session_state["st_map"] = st_map
 
 
 def main(model_list):
