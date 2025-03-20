@@ -287,7 +287,7 @@ def thread_for_position():
         else:
             # print("THREAD - st_map not available..")
             pass
-        time.sleep(0.01)
+        time.sleep(0.4)
 
 
 def initial_state_management():
@@ -317,20 +317,38 @@ def map_state_initialization():
 
 
 def create_only_map(rgba_img, prediction: bool = False):
-    if "center" in st.session_state and "zoom" in st.session_state:
-        center = st.session_state["center"]
-        zoom = st.session_state["zoom"]
+    if st.session_state.selected_model and st.session_state.selected_time:
+        print("NEW PREDICTION from create_only_map(): " + str(st.session_state["new_prediction"]))
+        if "new_prediction" in st.session_state and st.session_state["new_prediction"]:
+            # 3 --> nuova predizione da caricare, si aggiorna il centro
+            center = st.session_state["center"]
+            zoom = st.session_state["zoom"]
+
+            st.session_state["old_center"] = center
+            st.session_state["old_zoom"] = zoom
+
+            st.session_state["new_prediction"] = False
+        elif "old_center" in st.session_state and "old_zoom" in st.session_state:
+            center = st.session_state["old_center"]
+            zoom = st.session_state["old_zoom"]
+        elif "center" in st.session_state and "zoom" in st.session_state:
+            # 1 --> direttamente sull'overlay
+            center = st.session_state["center"]
+            zoom = st.session_state["zoom"]
+
+            # 2 --> salvataggio come valori precedenti
+            st.session_state["old_center"] = center
+            st.session_state["old_zoom"] = zoom
     else:
         center = {'lat': 42.5, 'lng': 12.5}
         zoom = 5
 
         if "thread_for_position" not in st.session_state:
-            print("THREAD - start")
-            ctx = get_script_run_ctx()
+            # ctx = get_script_run_ctx()
             st.session_state["thread_for_position"] = True
-            thread_for_pos = threading.Thread(target=thread_for_position, args=())
-            add_script_run_ctx(thread_for_pos, ctx)
-            thread_for_pos.start()
+            # thread_for_pos = threading.Thread(target=thread_for_position, args=())
+            # add_script_run_ctx(thread_for_pos, ctx)
+            # thread_for_pos.start()
 
     map = folium.Map(location=[center['lat'], center['lng']],
                      zoom_start=zoom,
@@ -382,6 +400,9 @@ def create_only_map(rgba_img, prediction: bool = False):
     folium.LayerControl().add_to(map)
     st_map = st_folium(map, width=800, height=600, use_container_width=True)
     st.session_state["st_map"] = st_map
+    if "center" in st_map.keys():
+        st.session_state["center"] = st_map["center"]
+        st.session_state["zoom"] = st_map["zoom"]
 
 
 def show_real_time_prediction():
@@ -454,6 +475,8 @@ def show_real_time_prediction():
             print("LAUNCH PREDICTION..")
             launch_thread_execution(st, latest_file, columns)
             st.session_state.selection = None
+            print("FROM MAIN new prediction")
+            st.session_state["new_prediction"] = True
         else:
             print(f"Current SRI == Latest file processed! {latest_file}. Skipped prediction")
 
