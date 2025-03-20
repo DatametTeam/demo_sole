@@ -559,7 +559,7 @@ def load_config(config_path):
     return config
 
 
-def get_latest_file(folder_path):
+def get_latest_file(folder_path, event):
     files = [f for f in os.listdir(folder_path) if f.endswith(".hdf")]
     if not files:
         return None
@@ -568,7 +568,9 @@ def get_latest_file(folder_path):
 
     # aggiustamento di test, non pushare!
     rand = random.randint(0, int(len(files) / 2))
-    return files[rand]
+    st.session_state["latest_"] = files[rand]
+    if event:
+        event.set()
 
 
 def generate_splotchy_image(height, width, num_clusters, cluster_radius):
@@ -667,10 +669,6 @@ def launch_thread_execution(st, latest_file, columns):
     st.session_state.latest_file = latest_file
     print(f"New SRI file available! {latest_file}")
     with columns[1]:
-        st.write("")
-        st.write("")
-        st.status(label="✅ Found new data!", state="complete", expanded=False)
-
         event = threading.Event()
         print(f"prima dell'if stato thread_started: {st.session_state.thread_started}")
         print("Starting thread")
@@ -687,7 +685,7 @@ def launch_thread_execution(st, latest_file, columns):
                 status_placeholder.text(f"Prediction running for {int(time.time() - time_prediction)} seconds")
                 i += 1
                 time.sleep(1)
-        thread.join()
+            thread.join()
         status.update(label="✅ Prediction completed!", state="complete", expanded=False)
 
 

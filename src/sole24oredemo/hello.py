@@ -309,8 +309,8 @@ def map_state_initialization():
     if "last_map_update" not in st.session_state:
         st.session_state["last_map_update"] = None
         st.session_state["last_map_update"] = datetime.now().second
-        latest_file = get_latest_file(SRI_FOLDER_DIR)
-        st.session_state["latest_"] = latest_file
+        get_latest_file(SRI_FOLDER_DIR, None)
+
         if "new_update" not in st.session_state:
             st.session_state["new_update"] = None
         st.session_state["new_update"] = True
@@ -318,7 +318,6 @@ def map_state_initialization():
 
 def create_only_map(rgba_img, prediction: bool = False):
     if st.session_state.selected_model and st.session_state.selected_time:
-        print("NEW PREDICTION from create_only_map(): " + str(st.session_state["new_prediction"]))
         if "new_prediction" in st.session_state and st.session_state["new_prediction"]:
             # 3 --> nuova predizione da caricare, si aggiorna il centro
             center = st.session_state["center"]
@@ -342,13 +341,6 @@ def create_only_map(rgba_img, prediction: bool = False):
     else:
         center = {'lat': 42.5, 'lng': 12.5}
         zoom = 5
-
-        if "thread_for_position" not in st.session_state:
-            # ctx = get_script_run_ctx()
-            st.session_state["thread_for_position"] = True
-            # thread_for_pos = threading.Thread(target=thread_for_position, args=())
-            # add_script_run_ctx(thread_for_pos, ctx)
-            # thread_for_pos.start()
 
     map = folium.Map(location=[center['lat'], center['lng']],
                      zoom_start=zoom,
@@ -457,8 +449,18 @@ def show_real_time_prediction():
         if diff >= time_for_reloading_data:
             print("OBTAINING NEW INPUT FILE VERSION..")
             st.session_state["last_map_update"] = datetime.now().second
-            latest_file = get_latest_file(SRI_FOLDER_DIR)
-            st.session_state["latest_"] = latest_file
+
+            # posso lanciare questa roba su un thread e fare in modo che se l'applicazione refresha il thread continua
+            obtain_input_ev = threading.Event()
+
+            ctx = get_script_run_ctx()
+            obtain_input_th = threading.Thread(target=get_latest_file, args=(SRI_FOLDER_DIR, obtain_input_ev))
+            add_script_run_ctx(obtain_input_th, ctx)
+            obtain_input_th.start()
+            obtain_input_ev.wait()
+
+            print("Input data received with event!")
+
             st.session_state["new_update"] = True
 
         st.markdown("<div style='text-align: center; font-size: 18px;'>"
@@ -473,9 +475,12 @@ def show_real_time_prediction():
         if latest_file != st.session_state.latest_file:
             # calcolo della previsione
             print("LAUNCH PREDICTION..")
-            launch_thread_execution(st, latest_file, columns)
+            with columns[1]:
+                with st.status(f':hammer_and_wrench: **Launch prediction...**', expanded=True) as status:
+                    launch_thread_execution(st, latest_file, columns)
+                status.update(label="✅ Prediction completed!", state="complete", expanded=False)
+                st.session_state.latest_file = latest_file
             st.session_state.selection = None
-            print("FROM MAIN new prediction")
             st.session_state["new_prediction"] = True
         else:
             print(f"Current SRI == Latest file processed! {latest_file}. Skipped prediction")
@@ -492,6 +497,7 @@ def show_real_time_prediction():
 
                     # problema di caricamento lungo risolto con la cache e ttl
                     rgba_img = load_prediction_data(st, time_options, latest_file)
+
                 status.update(label="✅ Loading completed!", state="complete", expanded=False)
             create_only_map(rgba_img, prediction=True)
         else:
@@ -520,7 +526,7 @@ def main(model_list):
 
 
 # Initial auto-refresh interval (in seconds)
-seconds_for_autorefresh = 100
+seconds_for_autorefresh = 10000
 COUNT = st_autorefresh(interval=seconds_for_autorefresh * 1000)
 
 
