@@ -278,14 +278,102 @@ def thread_for_position():
         if "st_map" in st.session_state:
             st_map = st.session_state["st_map"]
             if 'center' in st_map.keys() and 'zoom' in st_map.keys():
-                print("THREAD - " + str(st_map['center']) + " -- " + str(st_map['zoom']))
+                # print("THREAD - " + str(st_map['center']) + " -- " + str(st_map['zoom']))
                 st.session_state["center"] = st_map['center']
                 st.session_state["zoom"] = st_map['zoom']
             else:
-                print("THREAD - center / zoom not available..")
+                # print("THREAD - center / zoom not available..")
+                pass
         else:
-            print("THREAD - st_map not available..")
-        time.sleep(0.4)
+            # print("THREAD - st_map not available..")
+            pass
+        time.sleep(0.01)
+
+
+def initial_state_management():
+    if 'selected_model' not in st.session_state:
+        st.session_state.selected_model = None
+    if 'selected_time' not in st.session_state:
+        st.session_state.selected_time = None
+    if 'latest_file' not in st.session_state:
+        st.session_state.latest_file = None
+    if 'rgba_image' not in st.session_state:
+        st.session_state.rgba_image = None
+    if 'thread_started' not in st.session_state:
+        st.session_state.thread_started = None
+    if 'old_count' not in st.session_state:
+        st.session_state.old_count = COUNT
+
+
+def map_state_initialization():
+    if "last_map_update" not in st.session_state:
+        st.session_state["last_map_update"] = None
+        st.session_state["last_map_update"] = datetime.now().second
+        latest_file = get_latest_file(SRI_FOLDER_DIR)
+        st.session_state["latest_"] = latest_file
+        if "new_update" not in st.session_state:
+            st.session_state["new_update"] = None
+        st.session_state["new_update"] = True
+
+
+def create_only_map(rgba_img, prediction: bool = False):
+    if "center" in st.session_state and "zoom" in st.session_state:
+        center = st.session_state["center"]
+        zoom = st.session_state["zoom"]
+    else:
+        center = {'lat': 42.5, 'lng': 12.5}
+        zoom = 5
+
+    map = folium.Map(location=[center['lat'], center['lng']],
+                     zoom_start=zoom,
+                     control_scale=False,  # Disable control scale
+                     tiles='Esri.WorldGrayCanvas',  # Watercolor map style
+                     name="WorldGray",
+                     )
+    folium.TileLayer(
+        tiles='Esri.WorldImagery',  # Satellite imagery
+        name="Satellite",
+        control=True
+    ).add_to(map)
+
+    folium.TileLayer(
+        tiles='OpenStreetMap.Mapnik',  # Satellite imagery
+        name="OSM",
+        control=True
+    ).add_to(map)
+
+    if prediction:
+        # ricreazione totale della mappa + predizione
+        folium.raster_layers.ImageOverlay(
+            image=rgba_img,
+            bounds=[[35.0623, 4.51987], [47.5730, 20.4801]],
+            mercator_project=False,
+            origin="lower",
+            name="NWC_pred"
+            # opacity=0.5
+        ).add_to(map)
+
+        data_min = 0  # Minimum value in your data
+        data_max = 100  # Maximum value in your data
+
+        data_values = [0, 1, 2, 5, 10, 20, 30, 50, 75, 100]
+        normalized_values = norm(data_values)
+
+        colormap = cm.LinearColormap(
+            colors=[cmap(n) for n in normalized_values],  # Generate 10 colors
+            index=data_values,  # Map to actual data values
+            vmin=data_min,
+            vmax=data_max
+        )
+
+        colormap.caption = "Prediction Intensity (mm/h)"
+        map.add_child(colormap)
+
+        st.session_state["new_update"] = False
+
+    folium.LayerControl().add_to(map)
+    st_map = st_folium(map, width=800, height=600, use_container_width=True)
+    st.session_state["st_map"] = st_map
 
 
 def show_real_time_prediction():
@@ -300,18 +388,7 @@ def show_real_time_prediction():
         thread_for_pos.start()
 
     # Initial state management
-    if 'selected_model' not in st.session_state:
-        st.session_state.selected_model = None
-    if 'selected_time' not in st.session_state:
-        st.session_state.selected_time = None
-    if 'latest_file' not in st.session_state:
-        st.session_state.latest_file = None
-    if 'rgba_image' not in st.session_state:
-        st.session_state.rgba_image = None
-    if 'thread_started' not in st.session_state:
-        st.session_state.thread_started = None
-    if 'old_count' not in st.session_state:
-        st.session_state.old_count = COUNT
+    initial_state_management()
 
     model_options = model_list
     time_options = ["+5min", "+10min", "+15min", "+20min", "+25min",
@@ -338,40 +415,7 @@ def show_real_time_prediction():
             )
 
         # questa cosa è chiamata solo la prima volta che viene eseguito il codice
-        if "last_map_update" not in st.session_state:
-            st.session_state["last_map_update"] = None
-            st.session_state["last_map_update"] = datetime.now().second
-            latest_file = get_latest_file(SRI_FOLDER_DIR)
-            st.session_state["latest_"] = latest_file
-            if "new_update" not in st.session_state:
-                st.session_state["new_update"] = None
-            st.session_state["new_update"] = True
-
-        if "center" in st.session_state and "zoom" in st.session_state:
-            center = st.session_state["center"]
-            zoom = st.session_state["zoom"]
-        else:
-            center = {'lat': 42.5, 'lng': 12.5}
-            zoom = 5
-
-        # creazione mappa solo la prima volta
-        map = folium.Map(location=[center['lat'], center['lng']],
-                         zoom_start=zoom,
-                         control_scale=False,  # Disable control scale
-                         tiles='Esri.WorldGrayCanvas',  # Watercolor map style
-                         name="WorldGray",
-                         )
-        folium.TileLayer(
-            tiles='Esri.WorldImagery',  # Satellite imagery
-            name="Satellite",
-            control=True
-        ).add_to(map)
-
-        folium.TileLayer(
-            tiles='OpenStreetMap.Mapnik',  # Satellite imagery
-            name="OSM",
-            control=True
-        ).add_to(map)
+        map_state_initialization()
 
         # qua serve:
         # -- thread che controlla l'aggiornamento dei dati
@@ -381,13 +425,13 @@ def show_real_time_prediction():
 
         print("----------------------------------------------------")
         diff = now - st.session_state["last_map_update"] if now >= st.session_state["last_map_update"] else (
-                    60 - st.session_state["last_map_update"] + now)
+                60 - st.session_state["last_map_update"] + now)
         print(now)
         print(st.session_state["last_map_update"])
         print("---> " + str(diff))
         print("----------------------------------------------------")
 
-        # ogni 5 secondi è possibile verificare se esiste un nuovo aggiornamento dei dati di input
+        # ogni tot secondi è possibile verificare se esiste un nuovo aggiornamento dei dati di input
         # in questa versione basta refreshare la pagina (interagire con la mappa)
         if diff >= time_for_reloading_data:
             print("OBTAINING NEW INPUT FILE VERSION..")
@@ -423,40 +467,12 @@ def show_real_time_prediction():
                 with st.status(f':hammer_and_wrench: **Loading prediction...**', expanded=True) as status:
                     print("LOAD PREDICTION DATA..")
 
-                    # il problema è che quando questa cosa viene eseguita più volte di fila blocca tutto
+                    # problema di caricamento lungo risolto con la cache e ttl
                     rgba_img = load_prediction_data(st, time_options, latest_file)
                 status.update(label="✅ Loading completed!", state="complete", expanded=False)
-
-            folium.raster_layers.ImageOverlay(
-                image=rgba_img,
-                bounds=[[35.0623, 4.51987], [47.5730, 20.4801]],
-                mercator_project=False,
-                origin="lower",
-                name="NWC_pred"
-                # opacity=0.5
-            ).add_to(map)
-
-            data_min = 0  # Minimum value in your data
-            data_max = 100  # Maximum value in your data
-
-            data_values = [0, 1, 2, 5, 10, 20, 30, 50, 75, 100]
-            normalized_values = norm(data_values)
-
-            colormap = cm.LinearColormap(
-                colors=[cmap(n) for n in normalized_values],  # Generate 10 colors
-                index=data_values,  # Map to actual data values
-                vmin=data_min,
-                vmax=data_max
-            )
-
-            colormap.caption = "Prediction Intensity (mm/h)"
-            map.add_child(colormap)
-
-            st.session_state["new_update"] = False
-
-        folium.LayerControl().add_to(map)
-        st_map = st_folium(map, width=800, height=600, use_container_width=True)
-        st.session_state["st_map"] = st_map
+            create_only_map(rgba_img, prediction=True)
+        else:
+            create_only_map(None)
 
 
 def main(model_list):
