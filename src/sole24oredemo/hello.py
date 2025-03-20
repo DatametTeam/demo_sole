@@ -324,6 +324,14 @@ def create_only_map(rgba_img, prediction: bool = False):
         center = {'lat': 42.5, 'lng': 12.5}
         zoom = 5
 
+        if "thread_for_position" not in st.session_state:
+            print("THREAD - start")
+            ctx = get_script_run_ctx()
+            st.session_state["thread_for_position"] = True
+            thread_for_pos = threading.Thread(target=thread_for_position, args=())
+            add_script_run_ctx(thread_for_pos, ctx)
+            thread_for_pos.start()
+
     map = folium.Map(location=[center['lat'], center['lng']],
                      zoom_start=zoom,
                      control_scale=False,  # Disable control scale
@@ -377,15 +385,7 @@ def create_only_map(rgba_img, prediction: bool = False):
 
 
 def show_real_time_prediction():
-    time_for_reloading_data = 45
-
-    if "thread_for_position" not in st.session_state:
-        print("THREAD - start")
-        ctx = get_script_run_ctx()
-        st.session_state["thread_for_position"] = True
-        thread_for_pos = threading.Thread(target=thread_for_position, args=())
-        add_script_run_ctx(thread_for_pos, ctx)
-        thread_for_pos.start()
+    time_for_reloading_data = 55
 
     # Initial state management
     initial_state_management()

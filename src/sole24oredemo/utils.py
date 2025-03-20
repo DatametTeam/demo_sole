@@ -587,7 +587,7 @@ def generate_splotchy_image(height, width, num_clusters, cluster_radius):
     return image
 
 
-@st.cache_data(ttl=45)
+@st.cache_data(ttl=58)
 def load_prediction_data(st, time_options, latest_file):
     if st.session_state.selected_model and st.session_state.selected_time:
 
