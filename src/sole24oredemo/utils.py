@@ -566,6 +566,9 @@ def get_latest_file(folder_path):
     # questo qua gira su un thread e simula la comparsa di un nuovo file di dati
     ctx = get_script_run_ctx()
     runtime = get_instance()
+
+    latest_file = None
+
     while True:
         files = [f for f in os.listdir(folder_path) if f.endswith(".hdf")]
         if not files:
@@ -589,13 +592,28 @@ def get_latest_file(folder_path):
         session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
         session_info.session.request_rerun(None)
 
+        # thread addormantato fino a 5 minuti
         now = datetime.now()
         next_interval = (now + timedelta(minutes=5)).replace(second=0, microsecond=0)
         wait_time = (next_interval - now).total_seconds()
         print(f"Waiting for {wait_time:.2f} seconds until the next interval...")
         time.sleep(wait_time)
 
+        while True:
+            files = [f for f in os.listdir(folder_path) if f.endswith(".hdf")]
+            if not files:
+                time.sleep(1)
+                continue
 
+            files.sort(key=lambda x: datetime.strptime(x.split(".")[0], "%d-%m-%Y-%H-%M"), reverse=True)
+            new_file = files[0]
+
+            if new_file != latest_file:
+                print(f"New file detected: {new_file}")
+                latest_file = new_file
+                break
+
+            time.sleep(1)
 
 
 
