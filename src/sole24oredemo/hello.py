@@ -309,8 +309,8 @@ def initial_state_management():
 
 def create_only_map(rgba_img, prediction: bool = False):
     if st.session_state.selected_model and st.session_state.selected_time:
-        if "new_prediction" in st.session_state:
-            if st.session_state["new_prediction"]:
+        if "display_prediction" in st.session_state:
+            if st.session_state["display_prediction"]:
                 # 3 --> nuova predizione da caricare, si aggiorna il centro
                 center = st.session_state["center"]
                 zoom = st.session_state["zoom"]
@@ -318,10 +318,10 @@ def create_only_map(rgba_img, prediction: bool = False):
                 st.session_state["old_center"] = center
                 st.session_state["old_zoom"] = zoom
 
-                st.session_state["new_prediction"] = False
+                st.session_state["display_prediction"] = False
             else:
-                center = {'lat': 42.5, 'lng': 12.5}
-                zoom = 5
+                center = st.session_state["old_center"]
+                zoom = st.session_state["old_zoom"]
         elif "old_center" in st.session_state and "old_zoom" in st.session_state:
             center = st.session_state["old_center"]
             zoom = st.session_state["old_zoom"]
@@ -472,7 +472,6 @@ def show_real_time_prediction():
                     st.session_state["prediction_data_thread"] = None
 
                 if "load_prediction_thread" in st.session_state:
-                    print(st.session_state["load_prediction_thread"])
                     if st.session_state["load_prediction_thread"] is False:
                         ctx = get_script_run_ctx()
                         load_pred_thread = threading.Thread(target=load_prediction_thread, args=(st, time_options, latest_file, columns), daemon=True)
@@ -489,7 +488,15 @@ def show_real_time_prediction():
                     st.session_state['load_prediction_thread'] = True
                     load_pred_thread.start()
 
-                create_only_map(None)
+                if "prediction_data_thread" in st.session_state:
+                    rgba_img = st.session_state["prediction_data_thread"]
+                    if rgba_img is not None:
+                        st.session_state['display_prediction'] = True
+                        create_only_map(rgba_img, prediction=True)
+                    else:
+                        create_only_map(None)
+                else:
+                    create_only_map(None)
             else:
                 # se st.session_state["new_prediction"] == False allora posso semplicemente applicare la predizione alla mappa
                 if "prediction_data_thread" in st.session_state:
@@ -505,15 +512,15 @@ def show_real_time_prediction():
 
     if st.session_state["run_get_latest_file"]:
         with columns[1]:
-            st.write("Running background file checker..")
+            st.write("Running background file CHECKER..")
 
     if st.session_state["launch_prediction_thread"]:
         with columns[1]:
-            st.write("Running background prediction calculator..")
+            st.write("Running background prediction CALCULATOR..")
 
     if "load_prediction_thread" in st.session_state and st.session_state["load_prediction_thread"]:
         with columns[1]:
-            st.write("Running background prediction loader..")
+            st.write("Running background prediction LOADER..")
 
 def main(model_list):
     sidebar_args = configure_sidebar(model_list)

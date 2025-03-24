@@ -657,6 +657,8 @@ def load_prediction_thread(st, time_options, latest_file, columns):
     ctx.session_state['prediction_data_thread'] = rgba_img
     ctx.session_state['new_prediction'] = False
     ctx.session_state['load_prediction_thread'] = False
+    ctx.session_state['display_prediction'] = True
+
     time.sleep(0.4)
 
     print("load prediction TERMINATED..")
@@ -704,7 +706,7 @@ def launch_thread_execution(st, latest_file, columns):
     ctx = get_script_run_ctx()
     runtime = get_instance()
 
-    st.session_state.latest_file = latest_file
+    ctx.session_state.latest_file = latest_file
     print(f"New SRI file available! {latest_file}")
     with columns[1]:
         event = threading.Event()
@@ -724,12 +726,12 @@ def launch_thread_execution(st, latest_file, columns):
         thread.join()
 
         # reset
-        st.session_state["launch_prediction_thread"] = None
+        ctx.session_state["launch_prediction_thread"] = None
 
         # state update
-        st.session_state.latest_file = latest_file
-        st.session_state.selection = None
-        st.session_state["new_prediction"] = True
+        ctx.session_state.latest_file = latest_file
+        ctx.session_state.selection = None
+        ctx.session_state["new_prediction"] = True
         print("launch prediction TERMINATED..")
 
     session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
