@@ -576,16 +576,40 @@ def get_latest_file(folder_path):
         # Sort files based on the timestamp in their names
         files.sort(key=lambda x: datetime.strptime(x.split(".")[0], "%d-%m-%Y-%H-%M"), reverse=True)
 
-        ctx.session_state['latest_thread'] = files[0]
-        ctx.session_state['new_update'] = True
-
         print(f"Input file found: {files[0]}")
 
-        # # fino a quando questo valore è 0 il processo non può terminare
-        # while ctx.session_state["sync_end"] == 0:
-        #     time.sleep(0.2)
+        if files[0] != latest_file:
+            ctx.session_state['latest_thread'] = files[0]
+            ctx.session_state['new_update'] = True
+            latest_file = files[0]
 
-        # ctx.session_state["sync_end"] = 0
+        now = datetime.now()
+        # Calculate the next 5-minute interval
+        next_minute = (now.minute // 5 + 1) * 5
+        if next_minute == 60:  # Handle the hour rollover case
+            next_interval = now.replace(hour=(now.hour + 1) % 24, minute=0, second=0, microsecond=0)
+        else:
+            next_interval = now.replace(minute=next_minute, second=0, microsecond=0)
+
+        wait_time = (next_interval - now).total_seconds()
+        print(f"{datetime.now()}: Waiting for {wait_time:.2f} seconds until the next interval...")
+        time.sleep(wait_time)
+
+        while True:
+            files = [f for f in os.listdir(folder_path) if f.endswith(".hdf")]
+
+            files.sort(key=lambda x: datetime.strptime(x.split(".")[0], "%d-%m-%Y-%H-%M"), reverse=True)
+            new_file = files[0]
+
+            print(f"Latest file: {latest_file} | New file: {new_file}")
+            if new_file != latest_file:
+                print(f"New file detected: {new_file}")
+                latest_file = new_file
+                ctx.session_state['latest_thread'] = files[0]
+                ctx.session_state['new_update'] = True
+                break
+
+            time.sleep(1)
 
         # ora rilancio l'applicazione per notificare il main
         print("Rerun main")
@@ -593,28 +617,6 @@ def get_latest_file(folder_path):
         session_info.session.request_rerun(None)
 
         # thread addormantato fino a 5 minuti
-        now = datetime.now()
-        next_interval = (now + timedelta(minutes=5)).replace(second=0, microsecond=0)
-        wait_time = (next_interval - now).total_seconds()
-        print(f"Waiting for {wait_time:.2f} seconds until the next interval...")
-        time.sleep(wait_time)
-
-        while True:
-            files = [f for f in os.listdir(folder_path) if f.endswith(".hdf")]
-            if not files:
-                time.sleep(1)
-                continue
-
-            files.sort(key=lambda x: datetime.strptime(x.split(".")[0], "%d-%m-%Y-%H-%M"), reverse=True)
-            new_file = files[0]
-
-            if new_file != latest_file:
-                print(f"New file detected: {new_file}")
-                latest_file = new_file
-                break
-
-            time.sleep(1)
-
 
 
 def generate_splotchy_image(height, width, num_clusters, cluster_radius):
