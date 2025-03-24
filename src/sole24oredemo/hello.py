@@ -511,16 +511,16 @@ def show_real_time_prediction():
 
     if st.session_state["run_get_latest_file"]:
         with columns[1]:
-            st.write("Running background file **CHECKER**..")
+            st.write("🔄 Running background file **CHECKER**..")
 
     if st.session_state["launch_prediction_thread"]:
         with columns[1]:
-            st.write("new data file **FOUNDED**..")
-            st.write("Running background prediction **CALCULATOR**..")
+            st.write("🚀 new data file **FOUNDED**..")
+            st.write("🛠️ Running background prediction **CALCULATOR**..")
 
     if "load_prediction_thread" in st.session_state and st.session_state["load_prediction_thread"]:
         with columns[1]:
-            st.write("Running background prediction **LOADER**..")
+            st.write("⚙️ Running background prediction **LOADER**..")
 
 
 def main(model_list):
