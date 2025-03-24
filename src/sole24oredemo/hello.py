@@ -459,11 +459,6 @@ def show_real_time_prediction():
         else:
             print(f"Current SRI == Latest file processed! {latest_file}. Skipped prediction")
 
-            with columns[1]:
-                st.write("")
-                st.write("")
-                st.status(label="✅ Using latest data available", state="complete", expanded=False)
-
         if st.session_state.selected_model and st.session_state.selected_time:
 
             # se st.session_state["new_prediction"] == True allora posso fare il caricamente di una nuova previsione
@@ -516,6 +511,7 @@ def show_real_time_prediction():
 
     if st.session_state["launch_prediction_thread"]:
         with columns[1]:
+            st.write("new data file FOUNDED..")
             st.write("Running background prediction CALCULATOR..")
 
     if "load_prediction_thread" in st.session_state and st.session_state["load_prediction_thread"]:
