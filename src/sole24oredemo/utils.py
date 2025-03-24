@@ -581,6 +581,12 @@ def get_latest_file(folder_path):
 
         print("Input file GENERATED")
 
+        # fino a quando questo valore è 0 il processo non può terminare
+        while ctx.session_state["sync_end"] == 0:
+            time.sleep(0.2)
+
+        ctx.session_state["sync_end"] = 0
+
         # ora rilancio l'applicazione per notificare il main
         print("Rerun main")
         session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
@@ -663,6 +669,12 @@ def load_prediction_thread(st, time_options, latest_file, columns):
 
     print("load prediction TERMINATED..")
 
+    # fino a quando questo valore è 0 il processo non può terminare
+    while ctx.session_state["sync_end"] == 0:
+        time.sleep(0.2)
+
+    ctx.session_state["sync_end"] = 0
+
     session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
     session_info.session.request_rerun(None)
 
@@ -733,6 +745,12 @@ def launch_thread_execution(st, latest_file, columns):
         ctx.session_state.selection = None
         ctx.session_state["new_prediction"] = True
         print("launch prediction TERMINATED..")
+
+        # fino a quando questo valore è 0 il processo non può terminare
+        while ctx.session_state["sync_end"] == 0:
+            time.sleep(0.2)
+
+        ctx.session_state["sync_end"] = 0
 
     session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
     session_info.session.request_rerun(None)

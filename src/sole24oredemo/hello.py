@@ -394,7 +394,7 @@ def create_only_map(rgba_img, prediction: bool = False):
 
 
 def show_real_time_prediction():
-    time_for_reloading_data = 55
+    st.session_state["sync_end"] = 1
 
     # Initial state management
     initial_state_management()
@@ -453,7 +453,8 @@ def show_real_time_prediction():
                 st.session_state["launch_prediction_thread"] = True
 
                 ctx = get_script_run_ctx()
-                launch_thread = threading.Thread(target=launch_thread_execution, args=(st, latest_file, columns), daemon=True)
+                launch_thread = threading.Thread(target=launch_thread_execution, args=(st, latest_file, columns),
+                                                 daemon=True)
                 add_script_run_ctx(launch_thread, ctx)
                 launch_thread.start()
         else:
@@ -469,7 +470,8 @@ def show_real_time_prediction():
                 if "load_prediction_thread" in st.session_state:
                     if st.session_state["load_prediction_thread"] is False:
                         ctx = get_script_run_ctx()
-                        load_pred_thread = threading.Thread(target=load_prediction_thread, args=(st, time_options, latest_file, columns), daemon=True)
+                        load_pred_thread = threading.Thread(target=load_prediction_thread,
+                                                            args=(st, time_options, latest_file, columns), daemon=True)
                         add_script_run_ctx(load_pred_thread, ctx)
                         print("LOAD PREDICTION 1..")
                         st.session_state['load_prediction_thread'] = True
@@ -487,7 +489,8 @@ def show_real_time_prediction():
                     rgba_img = st.session_state["prediction_data_thread"]
                     if rgba_img is not None:
                         st.session_state['display_prediction'] = True
-                        create_only_map(rgba_img, prediction=True)
+                        with st.spinner("Loading **DATA**..", show_time=True):
+                            create_only_map(rgba_img, prediction=True)
                     else:
                         create_only_map(None)
                 else:
@@ -497,7 +500,8 @@ def show_real_time_prediction():
                 if "prediction_data_thread" in st.session_state:
                     rgba_img = st.session_state["prediction_data_thread"]
                     if rgba_img is not None:
-                        create_only_map(rgba_img, prediction=True)
+                        with st.spinner("Loading **DATA**..", show_time=True):
+                            create_only_map(rgba_img, prediction=True)
                     else:
                         create_only_map(None)
                 else:
@@ -507,16 +511,17 @@ def show_real_time_prediction():
 
     if st.session_state["run_get_latest_file"]:
         with columns[1]:
-            st.write("Running background file CHECKER..")
+            st.write("Running background file **CHECKER**..")
 
     if st.session_state["launch_prediction_thread"]:
         with columns[1]:
-            st.write("new data file FOUNDED..")
-            st.write("Running background prediction CALCULATOR..")
+            st.write("new data file **FOUNDED**..")
+            st.write("Running background prediction **CALCULATOR**..")
 
     if "load_prediction_thread" in st.session_state and st.session_state["load_prediction_thread"]:
         with columns[1]:
-            st.write("Running background prediction LOADER..")
+            st.write("Running background prediction **LOADER**..")
+
 
 def main(model_list):
     sidebar_args = configure_sidebar(model_list)
@@ -536,6 +541,7 @@ def main(model_list):
         show_metrics_page(config)
 
     with tab4:
+        st.session_state["sync_end"] = 1
         show_real_time_prediction()
 
 
@@ -574,7 +580,6 @@ model_list = config.get("models", [])
 # tampone locale, da non pushare!
 root_dir = src_dir.parent
 SRI_FOLDER_DIR = str(os.path.join(root_dir, "SRI_adj"))
-
 
 if __name__ == "__main__":
     print(f"***NEWRUN @ {datetime.now()}***")
