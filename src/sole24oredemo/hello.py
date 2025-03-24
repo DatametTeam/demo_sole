@@ -28,6 +28,8 @@ import branca.colormap as cm
 from threading import Event
 from streamlit_autorefresh import st_autorefresh
 
+from sole24oredemo.utils import load_prediction_thread
+
 st.set_page_config(page_title="Weather prediction", page_icon=":flag-eu:", layout="wide")
 
 # if is_pbs_available():
@@ -305,28 +307,21 @@ def initial_state_management():
         st.session_state.old_count = COUNT
 
 
-def map_state_initialization():
-    if "last_map_update" not in st.session_state:
-        st.session_state["last_map_update"] = None
-        st.session_state["last_map_update"] = datetime.now().second
-        get_latest_file(SRI_FOLDER_DIR, None)
-
-        if "new_update" not in st.session_state:
-            st.session_state["new_update"] = None
-        st.session_state["new_update"] = True
-
-
 def create_only_map(rgba_img, prediction: bool = False):
     if st.session_state.selected_model and st.session_state.selected_time:
-        if "new_prediction" in st.session_state and st.session_state["new_prediction"]:
-            # 3 --> nuova predizione da caricare, si aggiorna il centro
-            center = st.session_state["center"]
-            zoom = st.session_state["zoom"]
+        if "new_prediction" in st.session_state:
+            if st.session_state["new_prediction"]:
+                # 3 --> nuova predizione da caricare, si aggiorna il centro
+                center = st.session_state["center"]
+                zoom = st.session_state["zoom"]
 
-            st.session_state["old_center"] = center
-            st.session_state["old_zoom"] = zoom
+                st.session_state["old_center"] = center
+                st.session_state["old_zoom"] = zoom
 
-            st.session_state["new_prediction"] = False
+                st.session_state["new_prediction"] = False
+            else:
+                center = {'lat': 42.5, 'lng': 12.5}
+                zoom = 5
         elif "old_center" in st.session_state and "old_zoom" in st.session_state:
             center = st.session_state["old_center"]
             zoom = st.session_state["old_zoom"]
@@ -338,6 +333,9 @@ def create_only_map(rgba_img, prediction: bool = False):
             # 2 --> salvataggio come valori precedenti
             st.session_state["old_center"] = center
             st.session_state["old_zoom"] = zoom
+        else:
+            center = {'lat': 42.5, 'lng': 12.5}
+            zoom = 5
     else:
         center = {'lat': 42.5, 'lng': 12.5}
         zoom = 5
@@ -387,8 +385,6 @@ def create_only_map(rgba_img, prediction: bool = False):
         colormap.caption = "Prediction Intensity (mm/h)"
         map.add_child(colormap)
 
-        st.session_state["new_update"] = False
-
     folium.LayerControl().add_to(map)
     st_map = st_folium(map, width=800, height=600, use_container_width=True)
     st.session_state["st_map"] = st_map
@@ -427,61 +423,39 @@ def show_real_time_prediction():
                 key="selected_time",
             )
 
-        # questa cosa è chiamata solo la prima volta che viene eseguito il codice
-        map_state_initialization()
-
-        # qua serve:
-        # -- thread che controlla l'aggiornamento dei dati
-        # -- thread che calcola le previsioni quando ci sono dati nuovi
-
-        now = datetime.now().second
-
-        print("----------------------------------------------------")
-        diff = now - st.session_state["last_map_update"] if now >= st.session_state["last_map_update"] else (
-                60 - st.session_state["last_map_update"] + now)
-        print(now)
-        print(st.session_state["last_map_update"])
-        print("---> " + str(diff))
-        print("----------------------------------------------------")
-
-        # ogni tot secondi è possibile verificare se esiste un nuovo aggiornamento dei dati di input
-        # in questa versione basta refreshare la pagina (interagire con la mappa)
-        if diff >= time_for_reloading_data:
-            print("OBTAINING NEW INPUT FILE VERSION..")
-            st.session_state["last_map_update"] = datetime.now().second
-
-            # posso lanciare questa roba su un thread e fare in modo che se l'applicazione refresha il thread continua
-            obtain_input_ev = threading.Event()
-
+        # THREAD per l'ottenimento automatico di nuovi file di input
+        if "get_latest_file_thread" not in st.session_state:
+            st.session_state["get_latest_file_thread"] = True
             ctx = get_script_run_ctx()
-            obtain_input_th = threading.Thread(target=get_latest_file, args=(SRI_FOLDER_DIR, obtain_input_ev))
+
+            # lanciato una volta sola questo thread gira autonomamente
+            st.session_state["run_get_latest_file"] = True
+            obtain_input_th = threading.Thread(target=get_latest_file, args=(SRI_FOLDER_DIR,), daemon=True)
             add_script_run_ctx(obtain_input_th, ctx)
             obtain_input_th.start()
-            obtain_input_ev.wait()
 
-            print("Input data received with event!")
-
-            st.session_state["new_update"] = True
+            time.sleep(0.4)
 
         st.markdown("<div style='text-align: center; font-size: 18px;'>"
                     f"<b>Current Date: {st.session_state.latest_file}</b>"
                     "</div>",
                     unsafe_allow_html=True)
 
-        # devo simulare questa cosa randomica
-        # praticamente ogni tot secondi devo fare in modo che un file nuovo venga messo nella cartella dei latest_files
-        # in modo che la modifica sia rilevata
-        latest_file = st.session_state["latest_"]
+        latest_file = st.session_state["latest_thread"]
         if latest_file != st.session_state.latest_file:
-            # calcolo della previsione
-            print("LAUNCH PREDICTION..")
-            with columns[1]:
-                with st.status(f':hammer_and_wrench: **Launch prediction...**', expanded=True) as status:
-                    launch_thread_execution(st, latest_file, columns)
-                status.update(label="✅ Prediction completed!", state="complete", expanded=False)
-                st.session_state.latest_file = latest_file
-            st.session_state.selection = None
-            st.session_state["new_prediction"] = True
+            # calcolo della previsione in background
+            if "launch_prediction_thread" not in st.session_state:
+                st.session_state["launch_prediction_thread"] = None
+
+            if st.session_state["launch_prediction_thread"] is None:
+                print("LAUNCH PREDICTION..")
+
+                st.session_state["launch_prediction_thread"] = True
+
+                ctx = get_script_run_ctx()
+                launch_thread = threading.Thread(target=launch_thread_execution, args=(st, latest_file, columns), daemon=True)
+                add_script_run_ctx(launch_thread, ctx)
+                launch_thread.start()
         else:
             print(f"Current SRI == Latest file processed! {latest_file}. Skipped prediction")
 
@@ -491,18 +465,55 @@ def show_real_time_prediction():
                 st.status(label="✅ Using latest data available", state="complete", expanded=False)
 
         if st.session_state.selected_model and st.session_state.selected_time:
-            with columns[1]:
-                with st.status(f':hammer_and_wrench: **Loading prediction...**', expanded=True) as status:
-                    print("LOAD PREDICTION DATA..")
 
-                    # problema di caricamento lungo risolto con la cache e ttl
-                    rgba_img = load_prediction_data(st, time_options, latest_file)
+            # se st.session_state["new_prediction"] == True allora posso fare il caricamente di una nuova previsione
+            if "new_prediction" in st.session_state and st.session_state["new_prediction"]:
+                if "prediction_data_thread" not in st.session_state:
+                    st.session_state["prediction_data_thread"] = None
 
-                status.update(label="✅ Loading completed!", state="complete", expanded=False)
-            create_only_map(rgba_img, prediction=True)
+                if "load_prediction_thread" in st.session_state:
+                    print(st.session_state["load_prediction_thread"])
+                    if st.session_state["load_prediction_thread"] is False:
+                        ctx = get_script_run_ctx()
+                        load_pred_thread = threading.Thread(target=load_prediction_thread, args=(st, time_options, latest_file, columns), daemon=True)
+                        add_script_run_ctx(load_pred_thread, ctx)
+                        print("LOAD PREDICTION 1..")
+                        st.session_state['load_prediction_thread'] = True
+                        load_pred_thread.start()
+                else:
+                    ctx = get_script_run_ctx()
+                    load_pred_thread = threading.Thread(target=load_prediction_thread,
+                                                        args=(st, time_options, latest_file, columns), daemon=True)
+                    add_script_run_ctx(load_pred_thread, ctx)
+                    print("LOAD PREDICTION 2..")
+                    st.session_state['load_prediction_thread'] = True
+                    load_pred_thread.start()
+
+                create_only_map(None)
+            else:
+                # se st.session_state["new_prediction"] == False allora posso semplicemente applicare la predizione alla mappa
+                if "prediction_data_thread" in st.session_state:
+                    rgba_img = st.session_state["prediction_data_thread"]
+                    if rgba_img is not None:
+                        create_only_map(rgba_img, prediction=True)
+                    else:
+                        create_only_map(None)
+                else:
+                    create_only_map(None)
         else:
             create_only_map(None)
 
+    if st.session_state["run_get_latest_file"]:
+        with columns[1]:
+            st.write("Running background file checker..")
+
+    if st.session_state["launch_prediction_thread"]:
+        with columns[1]:
+            st.write("Running background prediction calculator..")
+
+    if "load_prediction_thread" in st.session_state and st.session_state["load_prediction_thread"]:
+        with columns[1]:
+            st.write("Running background prediction loader..")
 
 def main(model_list):
     sidebar_args = configure_sidebar(model_list)
@@ -526,8 +537,7 @@ def main(model_list):
 
 
 # Initial auto-refresh interval (in seconds)
-seconds_for_autorefresh = 10000
-COUNT = st_autorefresh(interval=seconds_for_autorefresh * 1000)
+COUNT = None
 
 
 # Function to monitor time and adjust the refresh interval
@@ -561,6 +571,7 @@ model_list = config.get("models", [])
 # tampone locale, da non pushare!
 root_dir = src_dir.parent
 SRI_FOLDER_DIR = str(os.path.join(root_dir, "SRI_adj"))
+
 
 if __name__ == "__main__":
     print(f"***NEWRUN @ {datetime.now()}***")

@@ -15,6 +15,9 @@ import warnings
 import geopandas as gpd
 from datetime import datetime, timedelta
 import yaml
+from streamlit.runtime import get_instance
+from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
+
 import sou_py.dpg as dpg
 import streamlit as st
 from sole24oredemo.pbs import start_prediction_job
@@ -559,18 +562,34 @@ def load_config(config_path):
     return config
 
 
-def get_latest_file(folder_path, event):
-    files = [f for f in os.listdir(folder_path) if f.endswith(".hdf")]
-    if not files:
-        return None
-    # Sort files based on the timestamp in their names
-    files.sort(key=lambda x: datetime.strptime(x.split(".")[0], "%d-%m-%Y-%H-%M"), reverse=True)
+def get_latest_file(folder_path):
+    # questo qua gira su un thread e simula la comparsa di un nuovo file di dati
+    ctx = get_script_run_ctx()
+    runtime = get_instance()
+    while True:
+        files = [f for f in os.listdir(folder_path) if f.endswith(".hdf")]
+        if not files:
+            return None
+        # Sort files based on the timestamp in their names
+        files.sort(key=lambda x: datetime.strptime(x.split(".")[0], "%d-%m-%Y-%H-%M"), reverse=True)
 
-    # aggiustamento di test, non pushare!
-    rand = random.randint(0, int(len(files) / 2))
-    st.session_state["latest_"] = files[rand]
-    if event:
-        event.set()
+        # aggiustamento di test, non pushare!
+        rand = random.randint(0, int(len(files) / 2))
+
+        ctx.session_state['latest_thread'] = files[rand]
+        ctx.session_state['new_update'] = True
+
+        print("Input file GENERATED")
+
+        # ora rilancio l'applicazione per notificare il main
+        print("Rerun main")
+        session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
+        session_info.session.request_rerun(None)
+
+        # ogni 100 secondi c'è un file nuovo
+        for i in range(55):
+            # print(" -- " + str(i))
+            time.sleep(1)
 
 
 def generate_splotchy_image(height, width, num_clusters, cluster_radius):
@@ -589,7 +608,7 @@ def generate_splotchy_image(height, width, num_clusters, cluster_radius):
     return image
 
 
-@st.cache_data(ttl=58)
+@st.cache_data(ttl=56)
 def load_prediction_data(st, time_options, latest_file):
     if st.session_state.selected_model and st.session_state.selected_time:
 
@@ -599,7 +618,6 @@ def load_prediction_data(st, time_options, latest_file):
                 0, time_options.index(st.session_state.selected_time)]
 
         else:
-            # img1 = np.random.random((1, 12, 1400, 1200))[0, time_options.index(st.session_state.selected_time)]
             height = 1400
             width = 1200
             num_clusters = 10
@@ -628,6 +646,23 @@ def load_prediction_data(st, time_options, latest_file):
         return rgba_img
     else:
         return None
+
+
+def load_prediction_thread(st, time_options, latest_file, columns):
+    ctx = get_script_run_ctx()
+    runtime = get_instance()
+
+    rgba_img = load_prediction_data(st, time_options, latest_file)
+
+    ctx.session_state['prediction_data_thread'] = rgba_img
+    ctx.session_state['new_prediction'] = False
+    ctx.session_state['load_prediction_thread'] = False
+    time.sleep(0.4)
+
+    print("load prediction TERMINATED..")
+
+    session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
+    session_info.session.request_rerun(None)
 
 
 def worker_thread(event, latest_file, models_list=None):
@@ -659,13 +694,16 @@ def worker_thread_test(event):
     thread_id = threading.get_ident()
     print(f"Worker thread (ID: {thread_id}) is starting prediction...")
 
-    time.sleep(5)
+    time.sleep(10)
 
     print(f"Worker thread (ID: {thread_id}) has finished!")
     event.set()
 
 
 def launch_thread_execution(st, latest_file, columns):
+    ctx = get_script_run_ctx()
+    runtime = get_instance()
+
     st.session_state.latest_file = latest_file
     print(f"New SRI file available! {latest_file}")
     with columns[1]:
@@ -677,16 +715,25 @@ def launch_thread_execution(st, latest_file, columns):
         st.session_state.thread_started = True
         thread.start()
 
-        with st.status(f':hammer_and_wrench: **Running prediction...**', expanded=True) as status:
-            status_placeholder = st.empty()
-            i = 1
-            time_prediction = time.time()
-            while not event.is_set():
-                status_placeholder.text(f"Prediction running for {int(time.time() - time_prediction)} seconds")
-                i += 1
-                time.sleep(1)
-            thread.join()
-        status.update(label="✅ Prediction completed!", state="complete", expanded=False)
+        status_placeholder = st.empty()
+        i = 1
+        time_prediction = time.time()
+        while not event.is_set():
+            i += 1
+            time.sleep(1)
+        thread.join()
+
+        # reset
+        st.session_state["launch_prediction_thread"] = None
+
+        # state update
+        st.session_state.latest_file = latest_file
+        st.session_state.selection = None
+        st.session_state["new_prediction"] = True
+        print("launch prediction TERMINATED..")
+
+    session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
+    session_info.session.request_rerun(None)
 
 
 lat_0 = 42.0
