@@ -573,29 +573,30 @@ def get_latest_file(folder_path):
         # Sort files based on the timestamp in their names
         files.sort(key=lambda x: datetime.strptime(x.split(".")[0], "%d-%m-%Y-%H-%M"), reverse=True)
 
-        # aggiustamento di test, non pushare!
-        rand = random.randint(0, int(len(files) / 2))
-
-        ctx.session_state['latest_thread'] = files[rand]
+        ctx.session_state['latest_thread'] = files[0]
         ctx.session_state['new_update'] = True
 
-        print("Input file GENERATED")
+        print(f"Input file found: {files[0]}")
 
-        # fino a quando questo valore è 0 il processo non può terminare
-        while ctx.session_state["sync_end"] == 0:
-            time.sleep(0.2)
+        # # fino a quando questo valore è 0 il processo non può terminare
+        # while ctx.session_state["sync_end"] == 0:
+        #     time.sleep(0.2)
 
-        ctx.session_state["sync_end"] = 0
+        # ctx.session_state["sync_end"] = 0
 
         # ora rilancio l'applicazione per notificare il main
         print("Rerun main")
         session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
         session_info.session.request_rerun(None)
 
-        # ogni 100 secondi c'è un file nuovo
-        for i in range(55):
-            # print(" -- " + str(i))
-            time.sleep(1)
+        now = datetime.now()
+        next_interval = (now + timedelta(minutes=5)).replace(second=0, microsecond=0)
+        wait_time = (next_interval - now).total_seconds()
+        print(f"Waiting for {wait_time:.2f} seconds until the next interval...")
+        time.sleep(wait_time)
+
+
+
 
 
 def generate_splotchy_image(height, width, num_clusters, cluster_radius):
@@ -614,11 +615,15 @@ def generate_splotchy_image(height, width, num_clusters, cluster_radius):
     return image
 
 
-@st.cache_data(ttl=56)
+# @st.cache_data(ttl=56)
 def load_prediction_data(st, time_options, latest_file):
+    print("VORREI ENTRARE NELLA LOAD PREDICTION MA NON CI RIESCO")
+    print(st.session_state.selected_model)
+    print(st.session_state.selected_time)
     if st.session_state.selected_model and st.session_state.selected_time:
-
+        print("IL THREAD LOAD PREDICTION VUOLE CARICARE DEI DATI")
         if st.session_state.selected_model == 'ED_ConvLSTM':
+            print("PERCHGé NON LI STAI CARICANDO?")
             latest_npy = Path(latest_file).stem + '.npy'
             img1 = np.load(f"/davinci-1/work/protezionecivile/sole24/pred_teo/real_time_pred/ED_ConvLSTM/{latest_npy}")[
                 0, time_options.index(st.session_state.selected_time)]
@@ -665,15 +670,15 @@ def load_prediction_thread(st, time_options, latest_file, columns):
     ctx.session_state['load_prediction_thread'] = False
     ctx.session_state['display_prediction'] = True
 
-    time.sleep(0.4)
+    # time.sleep(0.4)
 
     print("load prediction TERMINATED..")
 
-    # fino a quando questo valore è 0 il processo non può terminare
-    while ctx.session_state["sync_end"] == 0:
-        time.sleep(0.2)
-
-    ctx.session_state["sync_end"] = 0
+    # # fino a quando questo valore è 0 il processo non può terminare
+    # while ctx.session_state["sync_end"] == 0:
+    #     time.sleep(0.2)
+    #
+    # ctx.session_state["sync_end"] = 0
 
     session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
     session_info.session.request_rerun(None)
@@ -725,7 +730,7 @@ def launch_thread_execution(st, latest_file, columns):
         print(f"prima dell'if stato thread_started: {st.session_state.thread_started}")
         print("Starting thread")
         # Start the worker thread only if no thread is running
-        thread = threading.Thread(target=worker_thread_test, args=(event,))
+        thread = threading.Thread(target=worker_thread, args=(event, latest_file))
         st.session_state.thread_started = True
         thread.start()
 
@@ -746,11 +751,11 @@ def launch_thread_execution(st, latest_file, columns):
         ctx.session_state["new_prediction"] = True
         print("launch prediction TERMINATED..")
 
-        # fino a quando questo valore è 0 il processo non può terminare
-        while ctx.session_state["sync_end"] == 0:
-            time.sleep(0.2)
-
-        ctx.session_state["sync_end"] = 0
+        # # fino a quando questo valore è 0 il processo non può terminare
+        # while ctx.session_state["sync_end"] == 0:
+        #     time.sleep(0.2)
+        #
+        # ctx.session_state["sync_end"] = 0
 
     session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
     session_info.session.request_rerun(None)

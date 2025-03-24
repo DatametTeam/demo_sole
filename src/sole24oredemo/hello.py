@@ -305,6 +305,10 @@ def initial_state_management():
         st.session_state.thread_started = None
     if 'old_count' not in st.session_state:
         st.session_state.old_count = COUNT
+    if 'previous_model' not in st.session_state:
+        st.session_state.previous_model = None
+    if 'previous_time' not in st.session_state:
+        st.session_state.previous_time = None
 
 
 def create_only_map(rgba_img, prediction: bool = False):
@@ -425,6 +429,7 @@ def show_real_time_prediction():
 
         # THREAD per l'ottenimento automatico di nuovi file di input
         if "get_latest_file_thread" not in st.session_state:
+            print("Sto entrando in get_latest_file_thread")
             st.session_state["get_latest_file_thread"] = True
             ctx = get_script_run_ctx()
 
@@ -463,11 +468,19 @@ def show_real_time_prediction():
         if st.session_state.selected_model and st.session_state.selected_time:
 
             # se st.session_state["new_prediction"] == True allora posso fare il caricamente di una nuova previsione
-            if "new_prediction" in st.session_state and st.session_state["new_prediction"]:
+            if "new_prediction" in st.session_state and st.session_state["new_prediction"] or \
+                    (st.session_state['previous_time'] != st.session_state['selected_time'] or
+                     st.session_state['previous_model'] != st.session_state['selected_model']):
+                st.session_state.previous_time = st.session_state.selected_time
+                st.session_state.previous_model = st.session_state.selected_model
+
+                print("Sono dentro il primo IF")
                 if "prediction_data_thread" not in st.session_state:
                     st.session_state["prediction_data_thread"] = None
 
                 if "load_prediction_thread" in st.session_state:
+                    print("Sono entrato nel secondo IF")
+
                     if st.session_state["load_prediction_thread"] is False:
                         ctx = get_script_run_ctx()
                         load_pred_thread = threading.Thread(target=load_prediction_thread,
@@ -477,6 +490,8 @@ def show_real_time_prediction():
                         st.session_state['load_prediction_thread'] = True
                         load_pred_thread.start()
                 else:
+                    print("Sono entrato nell'else")
+
                     ctx = get_script_run_ctx()
                     load_pred_thread = threading.Thread(target=load_prediction_thread,
                                                         args=(st, time_options, latest_file, columns), daemon=True)
@@ -496,7 +511,8 @@ def show_real_time_prediction():
                 else:
                     create_only_map(None)
             else:
-                # se st.session_state["new_prediction"] == False allora posso semplicemente applicare la predizione alla mappa
+                # se st.session_state["new_prediction"] == False allora posso semplicemente applicare la predizione
+                # alla mappa
                 if "prediction_data_thread" in st.session_state:
                     rgba_img = st.session_state["prediction_data_thread"]
                     if rgba_img is not None:
@@ -515,7 +531,7 @@ def show_real_time_prediction():
 
     if st.session_state["launch_prediction_thread"]:
         with columns[1]:
-            st.write("🚀 new data file **FOUNDED**..")
+            st.write("🚀 new data file **FOUND**..")
             st.write("🛠️ Running background prediction **CALCULATOR**..")
 
     if "load_prediction_thread" in st.session_state and st.session_state["load_prediction_thread"]:
@@ -578,8 +594,8 @@ config = load_config(os.path.join(src_dir, "sole24oredemo/cfg/cfg.yaml"))
 model_list = config.get("models", [])
 
 # tampone locale, da non pushare!
-root_dir = src_dir.parent
-SRI_FOLDER_DIR = str(os.path.join(root_dir, "SRI_adj"))
+# root_dir = src_dir.parent
+SRI_FOLDER_DIR = "/davinci-1/work/protezionecivile/data1/SRI_adj"
 
 if __name__ == "__main__":
     print(f"***NEWRUN @ {datetime.now()}***")
