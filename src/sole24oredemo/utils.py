@@ -581,12 +581,6 @@ def get_latest_file(folder_path):
 
         print(f"Input file found: {files[0]}")
 
-        # # fino a quando questo valore è 0 il processo non può terminare
-        # while ctx.session_state["sync_end"] == 0:
-        #     time.sleep(0.2)
-
-        # ctx.session_state["sync_end"] = 0
-
         # ora rilancio l'applicazione per notificare il main
         print("Rerun main")
         session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
@@ -616,7 +610,6 @@ def get_latest_file(folder_path):
             time.sleep(1)
 
 
-
 def generate_splotchy_image(height, width, num_clusters, cluster_radius):
     image = np.zeros((height, width))
     cluster_centers = np.random.randint(0, min(height, width), size=(num_clusters, 2))
@@ -633,15 +626,11 @@ def generate_splotchy_image(height, width, num_clusters, cluster_radius):
     return image
 
 
-# @st.cache_data(ttl=56)
 def load_prediction_data(st, time_options, latest_file):
-    print("VORREI ENTRARE NELLA LOAD PREDICTION MA NON CI RIESCO")
     print(st.session_state.selected_model)
     print(st.session_state.selected_time)
     if st.session_state.selected_model and st.session_state.selected_time:
-        print("IL THREAD LOAD PREDICTION VUOLE CARICARE DEI DATI")
         if st.session_state.selected_model == 'ED_ConvLSTM':
-            print("PERCHGé NON LI STAI CARICANDO?")
             latest_npy = Path(latest_file).stem + '.npy'
             img1 = np.load(f"/davinci-1/work/protezionecivile/sole24/pred_teo/real_time_pred/ED_ConvLSTM/{latest_npy}")[
                 0, time_options.index(st.session_state.selected_time)]
@@ -677,7 +666,7 @@ def load_prediction_data(st, time_options, latest_file):
         return None
 
 
-def load_prediction_thread(st, time_options, latest_file, columns):
+def load_prediction_thread(st, time_options, latest_file):
     ctx = get_script_run_ctx()
     runtime = get_instance()
 
@@ -688,15 +677,7 @@ def load_prediction_thread(st, time_options, latest_file, columns):
     ctx.session_state['load_prediction_thread'] = False
     ctx.session_state['display_prediction'] = True
 
-    # time.sleep(0.4)
-
     print("load prediction TERMINATED..")
-
-    # # fino a quando questo valore è 0 il processo non può terminare
-    # while ctx.session_state["sync_end"] == 0:
-    #     time.sleep(0.2)
-    #
-    # ctx.session_state["sync_end"] = 0
 
     session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
     session_info.session.request_rerun(None)
@@ -768,12 +749,6 @@ def launch_thread_execution(st, latest_file, columns):
         ctx.session_state.selection = None
         ctx.session_state["new_prediction"] = True
         print("launch prediction TERMINATED..")
-
-        # # fino a quando questo valore è 0 il processo non può terminare
-        # while ctx.session_state["sync_end"] == 0:
-        #     time.sleep(0.2)
-        #
-        # ctx.session_state["sync_end"] = 0
 
     session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
     session_info.session.request_rerun(None)

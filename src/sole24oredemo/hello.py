@@ -309,6 +309,10 @@ def initial_state_management():
         st.session_state.previous_model = None
     if 'previous_time' not in st.session_state:
         st.session_state.previous_time = None
+    if not "latest_thread" in st.session_state:
+        st.session_state["latest_thread"] = None
+    if "launch_prediction_thread" not in st.session_state:
+        st.session_state["launch_prediction_thread"] = None
 
 
 def create_only_map(rgba_img, prediction: bool = False):
@@ -397,6 +401,16 @@ def create_only_map(rgba_img, prediction: bool = False):
         st.session_state["zoom"] = st_map["zoom"]
 
 
+def load_prediction(time_options, latest_file, prediction_num):
+    ctx = get_script_run_ctx()
+    load_pred_thread = threading.Thread(target=load_prediction_thread,
+                                        args=(st, time_options, latest_file), daemon=True)
+    add_script_run_ctx(load_pred_thread, ctx)
+    print("LOAD PREDICTION -- " + str(prediction_num) + " --..")
+    st.session_state['load_prediction_thread'] = True
+    load_pred_thread.start()
+
+
 def show_real_time_prediction():
     st.session_state["sync_end"] = 1
 
@@ -439,6 +453,7 @@ def show_real_time_prediction():
             add_script_run_ctx(obtain_input_th, ctx)
             obtain_input_th.start()
 
+            # per dare tempo al thread di settare in sessione un nuovo file se esiste
             time.sleep(0.4)
 
         st.markdown("<div style='text-align: center; font-size: 18px;'>"
@@ -449,9 +464,6 @@ def show_real_time_prediction():
         latest_file = st.session_state["latest_thread"]
         if latest_file != st.session_state.latest_file:
             # calcolo della previsione in background
-            if "launch_prediction_thread" not in st.session_state:
-                st.session_state["launch_prediction_thread"] = None
-
             if st.session_state["launch_prediction_thread"] is None:
                 print("LAUNCH PREDICTION..")
 
@@ -466,6 +478,12 @@ def show_real_time_prediction():
             print(f"Current SRI == Latest file processed! {latest_file}. Skipped prediction")
 
         if st.session_state.selected_model and st.session_state.selected_time:
+            # carico di default l'ultima previsione disponibile solo la prima volta
+            if "first_prediction_visualization" not in st.session_state:
+                st.session_state["first_prediction_visualization"] = True
+                if latest_file is not None:
+                    pass
+                load_prediction(time_options, latest_file, 3)
 
             # se st.session_state["new_prediction"] == True allora posso fare il caricamente di una nuova previsione
             if "new_prediction" in st.session_state and st.session_state["new_prediction"] or \
@@ -479,26 +497,12 @@ def show_real_time_prediction():
                     st.session_state["prediction_data_thread"] = None
 
                 if "load_prediction_thread" in st.session_state:
-                    print("Sono entrato nel secondo IF")
-
                     if st.session_state["load_prediction_thread"] is False:
-                        ctx = get_script_run_ctx()
-                        load_pred_thread = threading.Thread(target=load_prediction_thread,
-                                                            args=(st, time_options, latest_file, columns), daemon=True)
-                        add_script_run_ctx(load_pred_thread, ctx)
-                        print("LOAD PREDICTION 1..")
-                        st.session_state['load_prediction_thread'] = True
-                        load_pred_thread.start()
+                        load_prediction(time_options, latest_file, 1)
                 else:
-                    print("Sono entrato nell'else")
-
-                    ctx = get_script_run_ctx()
-                    load_pred_thread = threading.Thread(target=load_prediction_thread,
-                                                        args=(st, time_options, latest_file, columns), daemon=True)
-                    add_script_run_ctx(load_pred_thread, ctx)
-                    print("LOAD PREDICTION 2..")
-                    st.session_state['load_prediction_thread'] = True
-                    load_pred_thread.start()
+                    print("LATEST FILE")
+                    print(str(latest_file))
+                    load_prediction(time_options, latest_file, 2)
 
                 if "prediction_data_thread" in st.session_state:
                     rgba_img = st.session_state["prediction_data_thread"]
