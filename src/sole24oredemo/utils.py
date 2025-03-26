@@ -576,21 +576,23 @@ def get_latest_file(folder_path):
         # Sort files based on the timestamp in their names
         files.sort(key=lambda x: datetime.strptime(x.split(".")[0], "%d-%m-%Y-%H-%M"), reverse=True)
 
-        ctx.session_state['latest_thread'] = files[0]
-        ctx.session_state['new_update'] = True
-
         print(f"Input file found: {files[0]}")
 
-        # ora rilancio l'applicazione per notificare il main
-        print("Rerun main")
-        session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
-        session_info.session.request_rerun(None)
+        if files[0] != latest_file:
+            ctx.session_state['latest_thread'] = files[0]
+            ctx.session_state['new_update'] = True
+            latest_file = files[0]
 
-        # thread addormantato fino a 5 minuti
         now = datetime.now()
-        next_interval = (now + timedelta(minutes=5)).replace(second=0, microsecond=0)
+        # Calculate the next 5-minute interval
+        next_minute = (now.minute // 5 + 1) * 5
+        if next_minute == 60:  # Handle the hour rollover case
+            next_interval = now.replace(hour=(now.hour + 1) % 24, minute=0, second=0, microsecond=0)
+        else:
+            next_interval = now.replace(minute=next_minute, second=0, microsecond=0)
+
         wait_time = (next_interval - now).total_seconds()
-        print(f"Waiting for {wait_time:.2f} seconds until the next interval...")
+        print(f"{datetime.now()}: Waiting for {wait_time:.2f} seconds until the next interval...")
         time.sleep(wait_time)
 
         while True:
@@ -608,6 +610,13 @@ def get_latest_file(folder_path):
                 break
 
             time.sleep(1)
+
+        # ora rilancio l'applicazione per notificare il main
+        print("Rerun main")
+        session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
+        session_info.session.request_rerun(None)
+
+        # thread addormantato fino a 5 minuti
 
 
 def generate_splotchy_image(height, width, num_clusters, cluster_radius):
