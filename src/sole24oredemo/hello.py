@@ -412,7 +412,6 @@ def load_prediction(time_options, latest_file, prediction_num):
     load_pred_thread.start()
 
 
-@st.fragment
 def background_checker_spinner(columns):
     print("BACKGROUND checker spinner")
     with columns[1]:
@@ -421,7 +420,6 @@ def background_checker_spinner(columns):
                 time.sleep(5)
 
 
-@st.fragment
 def background_prediction_calculator_spinner(columns):
     with columns[1]:
         st.write("🚀 new data file **FOUND**..")
@@ -430,7 +428,6 @@ def background_prediction_calculator_spinner(columns):
                 time.sleep(5)
 
 
-@st.fragment
 def background_prediction_loader_spinner(columns):
     with columns[1]:
         with st.spinner("⚙️ Running background prediction **LOADER**..", show_time=False):
