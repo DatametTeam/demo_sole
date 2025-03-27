@@ -1,3 +1,4 @@
+import functools
 import os
 import threading
 import h5py
@@ -411,6 +412,32 @@ def load_prediction(time_options, latest_file, prediction_num):
     load_pred_thread.start()
 
 
+@st.fragment
+def background_checker_spinner(columns):
+    print("BACKGROUND checker spinner")
+    with columns[1]:
+        with st.spinner("🔄 Running background file **CHECKER**..", show_time=False):
+            while True:
+                time.sleep(5)
+
+
+@st.fragment
+def background_prediction_calculator_spinner(columns):
+    with columns[1]:
+        st.write("🚀 new data file **FOUND**..")
+        with st.spinner("🛠️ Running background prediction **CALCULATOR**..", show_time=False):
+            while True:
+                time.sleep(5)
+
+
+@st.fragment
+def background_prediction_loader_spinner(columns):
+    with columns[1]:
+        with st.spinner("⚙️ Running background prediction **LOADER**..", show_time=False):
+            while True:
+                time.sleep(5)
+
+
 def show_real_time_prediction():
     st.session_state["sync_end"] = 1
 
@@ -529,18 +556,21 @@ def show_real_time_prediction():
         else:
             create_only_map(None)
 
-    if st.session_state["run_get_latest_file"]:
-        with columns[1]:
-            st.write("🔄 Running background file **CHECKER**..")
-
-    if st.session_state["launch_prediction_thread"]:
-        with columns[1]:
-            st.write("🚀 new data file **FOUND**..")
-            st.write("🛠️ Running background prediction **CALCULATOR**..")
-
+    # Spinner section
+    # --------------------------------------------------------------------------------------------
     if "load_prediction_thread" in st.session_state and st.session_state["load_prediction_thread"]:
-        with columns[1]:
-            st.write("⚙️ Running background prediction **LOADER**..")
+        background_prediction_loader_spinner(columns)
+    # --------------------------------------------------------------------------------------------
+
+    # ---------------------------------------------
+    if st.session_state["launch_prediction_thread"]:
+        background_prediction_calculator_spinner(columns)
+    # ---------------------------------------------
+
+    # ----------------------------------------
+    if st.session_state["run_get_latest_file"]:
+        background_checker_spinner(columns)
+    # ----------------------------------------
 
 
 def main(model_list):

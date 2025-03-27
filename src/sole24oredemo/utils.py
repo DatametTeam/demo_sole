@@ -573,7 +573,7 @@ def get_latest_file(folder_path):
         files = [f for f in os.listdir(folder_path) if f.endswith(".hdf")]
         if not files:
             return None
-        # Sort files based on the timestamp in their names
+
         files.sort(key=lambda x: datetime.strptime(x.split(".")[0], "%d-%m-%Y-%H-%M"), reverse=True)
 
         print(f"Input file found: {files[0]}")
@@ -584,7 +584,8 @@ def get_latest_file(folder_path):
             latest_file = files[0]
 
         now = datetime.now()
-        # Calculate the next 5-minute interval
+
+        # calculate the next 5-minute interval
         next_minute = (now.minute // 5 + 1) * 5
         if next_minute == 60:  # Handle the hour rollover case
             next_interval = now.replace(hour=(now.hour + 1) % 24, minute=0, second=0, microsecond=0)
@@ -595,6 +596,7 @@ def get_latest_file(folder_path):
         print(f"{datetime.now()}: Waiting for {wait_time:.2f} seconds until the next interval...")
         time.sleep(wait_time)
 
+        # polling cycle for the research of a new input file after the current 5 minutes slot is terminated
         while True:
             files = [f for f in os.listdir(folder_path) if f.endswith(".hdf")]
             if not files:
@@ -611,15 +613,14 @@ def get_latest_file(folder_path):
 
             time.sleep(1)
 
-        # ora rilancio l'applicazione per notificare il main
+        # reatart the application to force the refresh of the main loop
         print("Rerun main")
         session_info = runtime._session_mgr.get_active_session_info(ctx.session_id)
         session_info.session.request_rerun(None)
 
-        # thread addormantato fino a 5 minuti
-
 
 def generate_splotchy_image(height, width, num_clusters, cluster_radius):
+    # test function for generate predicted data
     image = np.zeros((height, width))
     cluster_centers = np.random.randint(0, min(height, width), size=(num_clusters, 2))
 
@@ -636,6 +637,8 @@ def generate_splotchy_image(height, width, num_clusters, cluster_radius):
 
 
 def load_prediction_data(st, time_options, latest_file):
+    # load data prediction file
+    # it works only for ED_ConvLSTM model
     print(st.session_state.selected_model)
     print(st.session_state.selected_time)
     if st.session_state.selected_model and st.session_state.selected_time:
